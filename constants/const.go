@@ -39,3 +39,6 @@ const (
 	// SessionBindRoute is the route used for binding session
 	SessionBindRoute = "sys.bindsession"
 )
+
+// SessionCtxKey is the context key where the session will be set
+var SessionCtxKey = "session"

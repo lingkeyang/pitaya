@@ -21,6 +21,7 @@
 package pitaya
 
 import (
+	"context"
 	"encoding/gob"
 	"os"
 	"os/signal"
@@ -401,4 +402,9 @@ func Shutdown() {
 // Error creates a new error with a code, message and metadata
 func Error(err error, code string, metadata ...map[string]string) *errors.Error {
 	return errors.NewError(err, code, metadata...)
+}
+
+// GetSessionFromCtx retrieves a session from a given context
+func GetSessionFromCtx(ctx context.Context) *session.Session {
+	return ctx.Value(constants.SessionCtxKey).(*session.Session)
 }
