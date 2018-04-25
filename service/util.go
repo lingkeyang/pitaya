@@ -22,7 +22,7 @@ package service
 
 import (
 	"bytes"
-	ctx "context"
+	"context"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -30,7 +30,7 @@ import (
 
 	"github.com/topfreegames/pitaya/component"
 	"github.com/topfreegames/pitaya/constants"
-	"github.com/topfreegames/pitaya/context"
+	pcontext "github.com/topfreegames/pitaya/context"
 	e "github.com/topfreegames/pitaya/errors"
 	"github.com/topfreegames/pitaya/internal/message"
 	"github.com/topfreegames/pitaya/logger"
@@ -76,6 +76,7 @@ func unmarshalRemoteArg(payload []byte) ([]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	args[0] = pcontext.FromMap(args[0].(map[string]interface{}))
 	return args, nil
 }
 
@@ -91,7 +92,7 @@ func getMsgType(msgTypeIface interface{}) (message.Type, error) {
 	return msgType, nil
 }
 
-func executeBeforePipeline(ctx *context.Ctx, data []byte) ([]byte, error) {
+func executeBeforePipeline(ctx context.Context, data []byte) ([]byte, error) {
 	var err error
 	res := data
 	if len(pipeline.BeforeHandler.Handlers) > 0 {
@@ -109,7 +110,7 @@ func executeBeforePipeline(ctx *context.Ctx, data []byte) ([]byte, error) {
 	return res, nil
 }
 
-func executeAfterPipeline(ctx *context.Ctx, ser serialize.Serializer, res []byte) []byte {
+func executeAfterPipeline(ctx context.Context, ser serialize.Serializer, res []byte) []byte {
 	var err error
 	ret := res
 	if len(pipeline.AfterHandler.Handlers) > 0 {
@@ -148,7 +149,7 @@ func processHandlerMessage(
 	remote bool,
 ) ([]byte, error) {
 	// TODO camila probably receive from somewhere
-	ctx := context.WithValue(ctx.Background(), constants.SessionCtxKey, session)
+	ctx := context.WithValue(context.Background(), constants.SessionCtxKey, session)
 	h, err := getHandler(rt)
 	if err != nil {
 		return nil, e.NewError(err, e.ErrNotFoundCode)

@@ -42,3 +42,7 @@ const (
 
 // SessionCtxKey is the context key where the session will be set
 var SessionCtxKey = "session"
+
+// PropagateCtxKey is the context key where the content that will be
+// propagated through rpc calls is set
+var PropagateCtxKey = "propagate"

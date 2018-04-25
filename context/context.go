@@ -22,28 +22,36 @@ package context
 
 import (
 	"context"
-	"reflect"
+
+	"github.com/topfreegames/pitaya/constants"
 )
 
-// pitaya's implementation of context.valueCtx
-type Ctx struct {
-	context.Context
-	key, val interface{}
+// AddToPropagateCtx adds a key and value that will be propagated through RPC calls
+func AddToPropagateCtx(ctx context.Context, key string, val interface{}) context.Context {
+	propagate := ToMap(ctx)
+	propagate[key] = val
+	return context.WithValue(ctx, constants.PropagateCtxKey, propagate)
 }
 
-func (c *Ctx) Value(key interface{}) interface{} {
-	if c.key == key {
-		return c.val
+// GetFromPropagateCtx adds a key and value to the propagate
+func GetFromPropagateCtx(ctx context.Context, key string) interface{} {
+	propagate := ToMap(ctx)
+	if val, ok := propagate[key]; ok {
+		return val
 	}
-	return c.Context.Value(key)
+	return nil
 }
 
-func WithValue(parent context.Context, key, val interface{}) *Ctx {
-	if key == nil {
-		panic("nil key")
+// ToMap returns the values that will be propagated through RPC calls in map[string]interface{} format
+func ToMap(ctx context.Context) map[string]interface{} {
+	p := ctx.Value(constants.PropagateCtxKey)
+	if p != nil {
+		return p.(map[string]interface{})
 	}
-	if !reflect.TypeOf(key).Comparable() {
-		panic("key is not comparable")
-	}
-	return &Ctx{parent, key, val}
+	return map[string]interface{}{}
+}
+
+// FromMap creates a new context with the propagated values
+func FromMap(val map[string]interface{}) context.Context {
+	return context.WithValue(context.Background(), constants.PropagateCtxKey, val)
 }

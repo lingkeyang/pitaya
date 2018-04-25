@@ -22,6 +22,7 @@ package session
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
 	"net"
 	"sync"
@@ -30,7 +31,7 @@ import (
 
 	nats "github.com/nats-io/go-nats"
 	"github.com/topfreegames/pitaya/constants"
-	"github.com/topfreegames/pitaya/context"
+	pcontext "github.com/topfreegames/pitaya/context"
 	"github.com/topfreegames/pitaya/logger"
 	"github.com/topfreegames/pitaya/protos"
 	"github.com/topfreegames/pitaya/util"
@@ -208,7 +209,7 @@ func (s *Session) SetFrontendData(frontendID string, frontendSessionID int64) {
 }
 
 // Bind bind UID to current session
-func (s *Session) Bind(ctx *context.Ctx, uid string) error {
+func (s *Session) Bind(ctx context.Context, uid string) error {
 	if uid == "" {
 		return constants.ErrIllegalUID
 	}
@@ -542,7 +543,7 @@ func (s *Session) Value(key string) interface{} {
 	return s.data[key]
 }
 
-func (s *Session) bindInFront(ctx *context.Ctx) error {
+func (s *Session) bindInFront(ctx context.Context) error {
 	sessionData := &Data{
 		ID:  s.frontendSessionID,
 		UID: s.uid,
@@ -561,8 +562,8 @@ func (s *Session) bindInFront(ctx *context.Ctx) error {
 }
 
 // PushToFront updates the session in the frontend
-func (s *Session) PushToFront(ctx *context.Ctx) error {
-	// TODO camila receive ctx
+func (s *Session) PushToFront(ctx context.Context) error {
+	// TODO pq nao usar o fluxo padrao de chamadas rpc user ?
 	if s.IsFrontend {
 		return constants.ErrFrontSessionCantPushToFront
 	}
@@ -572,10 +573,8 @@ func (s *Session) PushToFront(ctx *context.Ctx) error {
 		Data: s.data,
 	}
 
-	// TODO camila build from ctx
-	// TODO works but it useless
-	c := &context.Ctx{}
-	b, err := util.GobEncode(c, sessionData)
+	m := pcontext.ToMap(ctx)
+	b, err := util.GobEncode(m, sessionData)
 	if err != nil {
 		return err
 	}

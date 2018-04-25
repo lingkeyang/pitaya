@@ -21,6 +21,7 @@
 package pitaya
 
 import (
+	"context"
 	"encoding/gob"
 	"os"
 	"os/signal"
@@ -37,7 +38,7 @@ import (
 	"github.com/topfreegames/pitaya/component"
 	"github.com/topfreegames/pitaya/config"
 	"github.com/topfreegames/pitaya/constants"
-	"github.com/topfreegames/pitaya/context"
+	pcontext "github.com/topfreegames/pitaya/context"
 	"github.com/topfreegames/pitaya/errors"
 	"github.com/topfreegames/pitaya/internal/codec"
 	"github.com/topfreegames/pitaya/internal/message"
@@ -238,7 +239,7 @@ func startDefaultRPCClient() {
 
 func initSysRemotes() {
 	gob.Register(&session.Data{})
-	gob.Register(&context.Ctx{})
+	gob.Register(map[string]interface{}{})
 	sys := &remote.Sys{}
 	RegisterRemote(sys,
 		component.WithName("sys"),
@@ -406,6 +407,16 @@ func Error(err error, code string, metadata ...map[string]string) *errors.Error 
 }
 
 // GetSessionFromCtx retrieves a session from a given context
-func GetSessionFromCtx(ctx *context.Ctx) *session.Session {
+func GetSessionFromCtx(ctx context.Context) *session.Session {
 	return ctx.Value(constants.SessionCtxKey).(*session.Session)
+}
+
+// AddToPropagateCtx adds a key and value that will be propagated through RPC calls
+func AddToPropagateCtx(ctx context.Context, key string, val interface{}) context.Context {
+	return pcontext.AddToPropagateCtx(ctx, key, val)
+}
+
+// GetFromPropagateCtx adds a key and value that came through RPC calls
+func GetFromPropagateCtx(ctx context.Context, key string) interface{} {
+	return pcontext.GetFromPropagateCtx(ctx, key)
 }
