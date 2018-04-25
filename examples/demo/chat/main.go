@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 	"github.com/topfreegames/pitaya"
 	"github.com/topfreegames/pitaya/acceptor"
 	"github.com/topfreegames/pitaya/component"
+	"github.com/topfreegames/pitaya/context"
 	"github.com/topfreegames/pitaya/examples/demo/chat/protos"
 	"github.com/topfreegames/pitaya/serialize/protobuf"
 	"github.com/topfreegames/pitaya/timer"
@@ -35,12 +35,12 @@ type (
 	}
 )
 
-func (stats *stats) outbound(ctx context.Context, in []byte) ([]byte, error) {
+func (stats *stats) outbound(ctx *context.Ctx, in []byte) ([]byte, error) {
 	stats.outboundBytes += len(in)
 	return in, nil
 }
 
-func (stats *stats) inbound(ctx context.Context, in []byte) ([]byte, error) {
+func (stats *stats) inbound(ctx *context.Ctx, in []byte) ([]byte, error) {
 	stats.inboundBytes += len(in)
 	return in, nil
 }
@@ -63,7 +63,7 @@ func (r *Room) AfterInit() {
 }
 
 // Join room
-func (r *Room) Join(ctx context.Context, msg []byte) (*protos.JoinResponse, error) {
+func (r *Room) Join(ctx *context.Ctx, msg []byte) (*protos.JoinResponse, error) {
 	res := &protos.JoinResponse{}
 	s := pitaya.GetSessionFromCtx(ctx)
 	fakeUID := s.ID()                         // just use s.ID as uid !!!
@@ -89,7 +89,7 @@ func (r *Room) Join(ctx context.Context, msg []byte) (*protos.JoinResponse, erro
 }
 
 // Message sync last message to all members
-func (r *Room) Message(ctx context.Context, msg *protos.UserMessage) {
+func (r *Room) Message(ctx *context.Ctx, msg *protos.UserMessage) {
 	err := r.group.Broadcast("onMessage", msg)
 	if err != nil {
 		fmt.Println("error broadcasting message", err)

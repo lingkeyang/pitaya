@@ -1,11 +1,11 @@
 package services
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/topfreegames/pitaya"
 	"github.com/topfreegames/pitaya/component"
+	"github.com/topfreegames/pitaya/context"
 )
 
 // ConnectorRemote is a remote that will receive rpc's
@@ -38,7 +38,7 @@ func reply(code int32, msg string) (*Response, error) {
 }
 
 // GetSessionData gets the session data
-func (c *Connector) GetSessionData(ctx context.Context) (*SessionData, error) {
+func (c *Connector) GetSessionData(ctx *context.Ctx) (*SessionData, error) {
 	s := pitaya.GetSessionFromCtx(ctx)
 	res := &SessionData{
 		Data: s.GetData(),
@@ -47,7 +47,7 @@ func (c *Connector) GetSessionData(ctx context.Context) (*SessionData, error) {
 }
 
 // SetSessionData sets the session data
-func (c *Connector) SetSessionData(ctx context.Context, data *SessionData) (*Response, error) {
+func (c *Connector) SetSessionData(ctx *context.Ctx, data *SessionData) (*Response, error) {
 	s := pitaya.GetSessionFromCtx(ctx)
 	err := s.SetData(data.Data)
 	if err != nil {
@@ -57,7 +57,7 @@ func (c *Connector) SetSessionData(ctx context.Context, data *SessionData) (*Res
 }
 
 // NotifySessionData sets the session data
-func (c *Connector) NotifySessionData(ctx context.Context, data *SessionData) {
+func (c *Connector) NotifySessionData(ctx *context.Ctx, data *SessionData) {
 	s := pitaya.GetSessionFromCtx(ctx)
 	err := s.SetData(data.Data)
 	if err != nil {
@@ -66,7 +66,7 @@ func (c *Connector) NotifySessionData(ctx context.Context, data *SessionData) {
 }
 
 // RemoteFunc is a function that will be called remotely
-func (c *ConnectorRemote) RemoteFunc(ctx context.Context, message string) (*RPCResponse, error) {
+func (c *ConnectorRemote) RemoteFunc(ctx *context.Ctx, message string) (*RPCResponse, error) {
 	fmt.Printf("received a remote call with this message: %s\n", message)
 	return &RPCResponse{
 		Msg: message,

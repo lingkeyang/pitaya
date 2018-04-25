@@ -18,27 +18,32 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package cluster
+package context
 
 import (
-	"github.com/topfreegames/pitaya/interfaces"
-	"github.com/topfreegames/pitaya/internal/message"
-	"github.com/topfreegames/pitaya/protos"
-	"github.com/topfreegames/pitaya/route"
-	"github.com/topfreegames/pitaya/session"
+	"context"
+	"reflect"
 )
 
-// RPCServer interface
-type RPCServer interface {
-	GetUnhandledRequestsChannel() chan *protos.Request
-	// TODO user pushs and requests can be merged and processing would have a switch
-	GetUserPushChannel() chan *protos.Push
-	interfaces.Module
+// pitaya's implementation of context.valueCtx
+type Ctx struct {
+	context.Context
+	key, val interface{}
 }
 
-// RPCClient interface
-type RPCClient interface {
-	Send(route string, data []byte) error
-	Call(rpcType protos.RPCType, route *route.Route, session *session.Session, msg *message.Message, server *Server) (*protos.Response, error)
-	interfaces.Module
+func (c *Ctx) Value(key interface{}) interface{} {
+	if c.key == key {
+		return c.val
+	}
+	return c.Context.Value(key)
+}
+
+func WithValue(parent context.Context, key, val interface{}) *Ctx {
+	if key == nil {
+		panic("nil key")
+	}
+	if !reflect.TypeOf(key).Comparable() {
+		panic("key is not comparable")
+	}
+	return &Ctx{parent, key, val}
 }

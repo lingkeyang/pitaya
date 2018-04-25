@@ -21,7 +21,6 @@
 package pitaya
 
 import (
-	"context"
 	"encoding/gob"
 	"os"
 	"os/signal"
@@ -38,6 +37,7 @@ import (
 	"github.com/topfreegames/pitaya/component"
 	"github.com/topfreegames/pitaya/config"
 	"github.com/topfreegames/pitaya/constants"
+	"github.com/topfreegames/pitaya/context"
 	"github.com/topfreegames/pitaya/errors"
 	"github.com/topfreegames/pitaya/internal/codec"
 	"github.com/topfreegames/pitaya/internal/message"
@@ -238,7 +238,7 @@ func startDefaultRPCClient() {
 
 func initSysRemotes() {
 	gob.Register(&session.Data{})
-	gob.Register(map[string]interface{}{})
+	gob.Register(&context.Ctx{})
 	sys := &remote.Sys{}
 	RegisterRemote(sys,
 		component.WithName("sys"),
@@ -406,6 +406,6 @@ func Error(err error, code string, metadata ...map[string]string) *errors.Error 
 }
 
 // GetSessionFromCtx retrieves a session from a given context
-func GetSessionFromCtx(ctx context.Context) *session.Session {
+func GetSessionFromCtx(ctx *context.Ctx) *session.Session {
 	return ctx.Value(constants.SessionCtxKey).(*session.Session)
 }

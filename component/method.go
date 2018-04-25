@@ -21,18 +21,18 @@
 package component
 
 import (
-	"context"
 	"reflect"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/topfreegames/pitaya/context"
 	"github.com/topfreegames/pitaya/internal/message"
 )
 
 var (
 	typeOfError   = reflect.TypeOf((*error)(nil)).Elem()
 	typeOfBytes   = reflect.TypeOf(([]byte)(nil))
-	typeOfContext = reflect.TypeOf(new(context.Context)).Elem()
+	typeOfContext = reflect.TypeOf(&context.Ctx{})
 )
 
 func isExported(name string) bool {
@@ -49,12 +49,12 @@ func isRemoteMethod(method reflect.Method) bool {
 		return false
 	}
 
-	// Method needs ate least two ins: receiver and context.Context
+	// Method needs ate least two ins: receiver and context.Ctx
 	if mt.NumIn() < 2 {
 		return false
 	}
 
-	if t1 := mt.In(1); !t1.Implements(typeOfContext) {
+	if t1 := mt.In(1); t1.Kind() != reflect.Ptr || t1 != typeOfContext {
 		return false
 	}
 
@@ -78,12 +78,12 @@ func isHandlerMethod(method reflect.Method) bool {
 		return false
 	}
 
-	// Method needs two or three ins: receiver, context.Context and optional []byte or pointer.
+	// Method needs two or three ins: receiver, context.Ctx and optional []byte or pointer.
 	if mt.NumIn() != 2 && mt.NumIn() != 3 {
 		return false
 	}
 
-	if t1 := mt.In(1); !t1.Implements(typeOfContext) {
+	if t1 := mt.In(1); t1.Kind() != reflect.Ptr || t1 != typeOfContext {
 		return false
 	}
 
