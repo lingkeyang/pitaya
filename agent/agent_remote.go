@@ -40,9 +40,8 @@ import (
 
 // Remote corresponding to another server
 type Remote struct {
-	Session          *session.Session         // session
-	Srv              reflect.Value            // cached session reflect.Value, this avoids repeated calls to reflect.value(a.Session)
-	chDie            chan struct{}            // wait for close
+	Session          *session.Session // session
+	chDie            chan struct{}    // wait for close
 	messageEncoder   message.MessageEncoder
 	encoder          codec.PacketEncoder      // binary encoder
 	frontendID       string                   // the frontend that sent the request
@@ -71,7 +70,7 @@ func NewRemote(
 		rpcClient:        rpcClient,
 		serviceDiscovery: serviceDiscovery,
 		frontendID:       frontendID,
-		messageEncoder:  messageEncoder,
+		messageEncoder:   messageEncoder,
 	}
 
 	// binding session
@@ -82,7 +81,6 @@ func NewRemote(
 		return nil, err
 	}
 	a.Session = s
-	a.Srv = reflect.ValueOf(s)
 
 	return a, nil
 }

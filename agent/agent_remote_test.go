@@ -73,7 +73,6 @@ func TestNewRemote(t *testing.T) {
 	assert.Equal(t, frontendID, remote.frontendID)
 	assert.NotNil(t, remote.Session)
 	assert.False(t, remote.Session.IsFrontend)
-	assert.Equal(t, reflect.ValueOf(remote.Session), remote.Srv)
 }
 
 func TestNewRemoteFailsIfFailedToSetEncodedData(t *testing.T) {

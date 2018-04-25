@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -54,7 +53,6 @@ type (
 	// Agent corresponds to a user and is used for storing raw Conn information
 	Agent struct {
 		Session            *session.Session    // session
-		Srv                reflect.Value       // cached session reflect.Value, this avoids repeated calls to reflect.value(a.Session)
 		appDieChan         chan bool           // app die channel
 		chDie              chan struct{}       // wait for close
 		chSend             chan pendingMessage // push message queue
@@ -116,7 +114,6 @@ func NewAgent(
 	// bindng session
 	s := session.New(a, true)
 	a.Session = s
-	a.Srv = reflect.ValueOf(s)
 
 	return a
 }

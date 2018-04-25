@@ -238,6 +238,7 @@ func startDefaultRPCClient() {
 
 func initSysRemotes() {
 	gob.Register(&session.Data{})
+	gob.Register(map[string]interface{}{})
 	sys := &remote.Sys{}
 	RegisterRemote(sys,
 		component.WithName("sys"),

@@ -22,6 +22,7 @@ package session
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
 	"net"
 	"sync"
@@ -207,7 +208,7 @@ func (s *Session) SetFrontendData(frontendID string, frontendSessionID int64) {
 }
 
 // Bind bind UID to current session
-func (s *Session) Bind(uid string) error {
+func (s *Session) Bind(ctx context.Context, uid string) error {
 	if uid == "" {
 		return constants.ErrIllegalUID
 	}
@@ -231,7 +232,7 @@ func (s *Session) Bind(uid string) error {
 	} else {
 		// If frontentID is set this means it is a remote call and the current server
 		// is not the frontend server that received the user request
-		err := s.bindInFront()
+		err := s.bindInFront(ctx)
 		if err != nil {
 			logger.Log.Error("error while trying to push session to front: ", err)
 			s.uid = ""
@@ -541,7 +542,7 @@ func (s *Session) Value(key string) interface{} {
 	return s.data[key]
 }
 
-func (s *Session) bindInFront() error {
+func (s *Session) bindInFront(ctx) error {
 	sessionData := &Data{
 		ID:  s.frontendSessionID,
 		UID: s.uid,
@@ -560,7 +561,8 @@ func (s *Session) bindInFront() error {
 }
 
 // PushToFront updates the session in the frontend
-func (s *Session) PushToFront() error {
+func (s *Session) PushToFront(ctx context.Context) error {
+	// TODO camila receive ctx
 	if s.IsFrontend {
 		return constants.ErrFrontSessionCantPushToFront
 	}
@@ -569,7 +571,10 @@ func (s *Session) PushToFront() error {
 		UID:  s.uid,
 		Data: s.data,
 	}
-	b, err := util.GobEncode(sessionData)
+
+	// TODO build from ctx
+	m := map[string]interface{}{"camila": "oi"}
+	b, err := util.GobEncode(m, sessionData)
 	if err != nil {
 		return err
 	}

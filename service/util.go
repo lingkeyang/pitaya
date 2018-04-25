@@ -75,6 +75,13 @@ func unmarshalRemoteArg(payload []byte) ([]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	// TODO camila decode map[string]string into context
+	// fix this ugly
+	ctx := context.Background()
+	for k, v := range args[0].(map[string]interface{}) {
+		ctx = context.WithValue(ctx, k, v)
+	}
+	args[0] = ctx
 	return args, nil
 }
 
@@ -141,14 +148,12 @@ func serializeReturn(ser serialize.Serializer, ret interface{}) ([]byte, error) 
 func processHandlerMessage(
 	rt *route.Route,
 	serializer serialize.Serializer,
-	cachedSession reflect.Value,
 	session *session.Session,
 	data []byte,
 	msgTypeIface interface{},
 	remote bool,
 ) ([]byte, error) {
 	// TODO camila probably receive from somewhere
-	// ctx := context.WithValue(context.Background(), constants.SessionCtxKey, cachedSession)
 	ctx := context.WithValue(context.Background(), constants.SessionCtxKey, session)
 	h, err := getHandler(rt)
 	if err != nil {

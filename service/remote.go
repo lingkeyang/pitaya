@@ -297,7 +297,7 @@ func (r *RemoteService) handleRPCSys(req *protos.Request, rt *route.Route) {
 		return
 	}
 
-	ret, err := processHandlerMessage(rt, r.serializer, a.Srv, a.Session, req.GetMsg().GetData(), req.GetMsg().GetType(), true)
+	ret, err := processHandlerMessage(rt, r.serializer, a.Session, req.GetMsg().GetData(), req.GetMsg().GetType(), true)
 	if err != nil {
 		logger.Log.Warnf(err.Error())
 		response = &protos.Response{

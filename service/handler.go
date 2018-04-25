@@ -266,7 +266,7 @@ func (h *HandlerService) localProcess(a *agent.Agent, route *route.Route, msg *m
 		mid = 0
 	}
 
-	ret, err := processHandlerMessage(route, h.serializer, a.Srv, a.Session, msg.Data, msg.Type, false)
+	ret, err := processHandlerMessage(route, h.serializer, a.Session, msg.Data, msg.Type, false)
 	if err != nil {
 		logger.Log.Error(err)
 		a.AnswerWithError(mid, err)
@@ -281,4 +281,3 @@ func (h *HandlerService) DumpServices() {
 		logger.Log.Infof("registered handler %s, isRawArg: %s", name, handlers[name].IsRawArg)
 	}
 }
-

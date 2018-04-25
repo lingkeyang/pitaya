@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -95,7 +94,6 @@ func TestNewAgent(t *testing.T) {
 	assert.Equal(t, constants.StatusStart, ag.state)
 	assert.NotNil(t, ag.Session)
 	assert.True(t, ag.Session.IsFrontend)
-	assert.Equal(t, reflect.ValueOf(ag.Session), ag.Srv)
 
 	// second call should no call hdb encode
 	ag = NewAgent(nil, nil, mockEncoder, nil, hbTime, 10, dieChan, messageEncoder)
