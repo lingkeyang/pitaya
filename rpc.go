@@ -21,6 +21,7 @@
 package pitaya
 
 import (
+	"context"
 	"reflect"
 
 	"github.com/topfreegames/pitaya/constants"
@@ -59,6 +60,8 @@ func doSendRPC(serverID, routeStr string, reply interface{}, args ...interface{}
 		return constants.ErrNonsenseRPC
 	}
 
-	return remoteService.RPC(serverID, r, reply, args...)
+	// TODO camila get ctx from somewhere
+	ctx := context.Background()
+	return remoteService.RPC(ctx, serverID, r, reply, args...)
 
 }

@@ -141,6 +141,7 @@ func serializeReturn(ser serialize.Serializer, ret interface{}) ([]byte, error) 
 }
 
 func processHandlerMessage(
+	ctx context.Context,
 	rt *route.Route,
 	serializer serialize.Serializer,
 	session *session.Session,
@@ -148,8 +149,7 @@ func processHandlerMessage(
 	msgTypeIface interface{},
 	remote bool,
 ) ([]byte, error) {
-	// TODO camila probably receive from somewhere
-	ctx := context.WithValue(context.Background(), constants.SessionCtxKey, session)
+	ctx = context.WithValue(ctx, constants.SessionCtxKey, session)
 	h, err := getHandler(rt)
 	if err != nil {
 		return nil, e.NewError(err, e.ErrNotFoundCode)

@@ -21,6 +21,7 @@
 package agent
 
 import (
+	"context"
 	"net"
 	"reflect"
 
@@ -214,5 +215,7 @@ func (a *Remote) SendRequest(serverID, reqRoute string, v interface{}) (*protos.
 	if err != nil {
 		return nil, err
 	}
-	return a.rpcClient.Call(protos.RPCType_User, r, nil, msg, server)
+	ctx := context.Background()
+	// TODO camila use proper context
+	return a.rpcClient.Call(ctx, protos.RPCType_User, r, nil, msg, server)
 }

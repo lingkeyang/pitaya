@@ -21,6 +21,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
@@ -61,6 +62,7 @@ type (
 	}
 
 	unhandledMessage struct {
+		ctx   context.Context
 		agent *agent.Agent
 		route *route.Route
 		msg   *message.Message
@@ -109,10 +111,10 @@ func (h *HandlerService) Dispatch(thread int) {
 		// Calls to remote servers block calls to local server
 		select {
 		case lm := <-h.chLocalProcess:
-			h.localProcess(lm.agent, lm.route, lm.msg)
+			h.localProcess(lm.ctx, lm.agent, lm.route, lm.msg)
 
 		case rm := <-h.chRemoteProcess:
-			h.remoteService.remoteProcess(nil, rm.agent, rm.route, rm.msg)
+			h.remoteService.remoteProcess(rm.ctx, nil, rm.agent, rm.route, rm.msg)
 
 		case <-timer.GlobalTicker.C: // execute cron task
 			timer.Cron()
@@ -219,7 +221,8 @@ func (h *HandlerService) processPacket(a *agent.Agent, p *packet.Packet) error {
 		if err != nil {
 			return err
 		}
-		h.processMessage(a, msg)
+		// TODO camila use jaeger here
+		h.processMessage(context.Background(), a, msg)
 
 	case packet.Heartbeat:
 		// expected
@@ -229,7 +232,7 @@ func (h *HandlerService) processPacket(a *agent.Agent, p *packet.Packet) error {
 	return nil
 }
 
-func (h *HandlerService) processMessage(a *agent.Agent, msg *message.Message) {
+func (h *HandlerService) processMessage(ctx context.Context, a *agent.Agent, msg *message.Message) {
 	r, err := route.Decode(msg.Route)
 	if err != nil {
 		logger.Log.Error(err.Error())
@@ -242,6 +245,7 @@ func (h *HandlerService) processMessage(a *agent.Agent, msg *message.Message) {
 	}
 
 	message := unhandledMessage{
+		ctx:   ctx,
 		agent: a,
 		route: r,
 		msg:   msg,
@@ -257,7 +261,7 @@ func (h *HandlerService) processMessage(a *agent.Agent, msg *message.Message) {
 	}
 }
 
-func (h *HandlerService) localProcess(a *agent.Agent, route *route.Route, msg *message.Message) {
+func (h *HandlerService) localProcess(ctx context.Context, a *agent.Agent, route *route.Route, msg *message.Message) {
 	var mid uint
 	switch msg.Type {
 	case message.Request:
@@ -266,7 +270,7 @@ func (h *HandlerService) localProcess(a *agent.Agent, route *route.Route, msg *m
 		mid = 0
 	}
 
-	ret, err := processHandlerMessage(route, h.serializer, a.Session, msg.Data, msg.Type, false)
+	ret, err := processHandlerMessage(ctx, route, h.serializer, a.Session, msg.Data, msg.Type, false)
 	if err != nil {
 		logger.Log.Error(err)
 		a.AnswerWithError(mid, err)

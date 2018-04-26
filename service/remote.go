@@ -22,6 +22,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
 	"fmt"
 	"reflect"
@@ -32,6 +33,7 @@ import (
 	"github.com/topfreegames/pitaya/cluster"
 	"github.com/topfreegames/pitaya/component"
 	"github.com/topfreegames/pitaya/constants"
+	pcontext "github.com/topfreegames/pitaya/context"
 	e "github.com/topfreegames/pitaya/errors"
 	"github.com/topfreegames/pitaya/internal/codec"
 	"github.com/topfreegames/pitaya/internal/message"
@@ -80,10 +82,10 @@ func NewRemoteService(
 
 var remotes = make(map[string]*component.Remote) // all remote method
 
-func (r *RemoteService) remoteProcess(server *cluster.Server, a *agent.Agent, route *route.Route, msg *message.Message) {
+func (r *RemoteService) remoteProcess(ctx context.Context, server *cluster.Server, a *agent.Agent, route *route.Route, msg *message.Message) {
 	var res *protos.Response
 	var err error
-	if res, err = r.remoteCall(server, protos.RPCType_Sys, route, a.Session, msg); err != nil {
+	if res, err = r.remoteCall(ctx, server, protos.RPCType_Sys, route, a.Session, msg); err != nil {
 		logger.Log.Errorf(err.Error())
 		a.AnswerWithError(msg.ID, err)
 		return
@@ -100,7 +102,7 @@ func (r *RemoteService) remoteProcess(server *cluster.Server, a *agent.Agent, ro
 }
 
 // RPC makes rpcs
-func (r *RemoteService) RPC(serverID string, route *route.Route, reply interface{}, args ...interface{}) error {
+func (r *RemoteService) RPC(ctx context.Context, serverID string, route *route.Route, reply interface{}, args ...interface{}) error {
 	data, err := util.GobEncode(args...)
 	if err != nil {
 		return err
@@ -116,7 +118,7 @@ func (r *RemoteService) RPC(serverID string, route *route.Route, reply interface
 		return constants.ErrServerNotFound
 	}
 
-	res, err := r.remoteCall(target, protos.RPCType_User, route, nil, msg)
+	res, err := r.remoteCall(ctx, target, protos.RPCType_User, route, nil, msg)
 	if err != nil {
 		return err
 	}
@@ -297,7 +299,15 @@ func (r *RemoteService) handleRPCSys(req *protos.Request, rt *route.Route) {
 		return
 	}
 
-	ret, err := processHandlerMessage(rt, r.serializer, a.Session, req.GetMsg().GetData(), req.GetMsg().GetType(), true)
+	m := req.GetMetadata()
+	ctxMap := map[string]interface{}{}
+	err = gob.NewDecoder(bytes.NewReader(m)).Decode(&ctxMap)
+	if err != nil {
+		// TODO camila handle error
+	}
+	ctx := pcontext.FromMap(ctxMap)
+
+	ret, err := processHandlerMessage(ctx, rt, r.serializer, a.Session, req.GetMsg().GetData(), req.GetMsg().GetType(), true)
 	if err != nil {
 		logger.Log.Warnf(err.Error())
 		response = &protos.Response{
@@ -333,6 +343,7 @@ func (r *RemoteService) sendReply(reply string, response *protos.Response) {
 }
 
 func (r *RemoteService) remoteCall(
+	ctx context.Context,
 	server *cluster.Server,
 	rpcType protos.RPCType,
 	route *route.Route,
@@ -351,7 +362,7 @@ func (r *RemoteService) remoteCall(
 		}
 	}
 
-	res, err := r.rpcClient.Call(rpcType, route, session, msg, target)
+	res, err := r.rpcClient.Call(ctx, rpcType, route, session, msg, target)
 	if err != nil {
 		return nil, err
 	}

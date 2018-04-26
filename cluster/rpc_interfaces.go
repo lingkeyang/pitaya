@@ -21,6 +21,8 @@
 package cluster
 
 import (
+	"context"
+
 	"github.com/topfreegames/pitaya/interfaces"
 	"github.com/topfreegames/pitaya/internal/message"
 	"github.com/topfreegames/pitaya/protos"
@@ -38,7 +40,8 @@ type RPCServer interface {
 
 // RPCClient interface
 type RPCClient interface {
+	// TODO camila add ctx to Send
 	Send(route string, data []byte) error
-	Call(rpcType protos.RPCType, route *route.Route, session *session.Session, msg *message.Message, server *Server) (*protos.Response, error)
+	Call(ctx context.Context, rpcType protos.RPCType, route *route.Route, session *session.Session, msg *message.Message, server *Server) (*protos.Response, error)
 	interfaces.Module
 }

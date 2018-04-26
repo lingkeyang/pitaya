@@ -21,6 +21,7 @@
 package cluster
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -28,11 +29,13 @@ import (
 	nats "github.com/nats-io/go-nats"
 	"github.com/topfreegames/pitaya/config"
 	"github.com/topfreegames/pitaya/constants"
+	pcontext "github.com/topfreegames/pitaya/context"
 	"github.com/topfreegames/pitaya/errors"
 	"github.com/topfreegames/pitaya/internal/message"
 	"github.com/topfreegames/pitaya/protos"
 	"github.com/topfreegames/pitaya/route"
 	"github.com/topfreegames/pitaya/session"
+	"github.com/topfreegames/pitaya/util"
 )
 
 // NatsRPCClient struct
@@ -79,6 +82,7 @@ func (ns *NatsRPCClient) Send(topic string, data []byte) error {
 }
 
 func (ns *NatsRPCClient) buildRequest(
+	ctx context.Context,
 	rpcType protos.RPCType,
 	route *route.Route,
 	session *session.Session,
@@ -90,6 +94,14 @@ func (ns *NatsRPCClient) buildRequest(
 			Route: route.String(),
 			Data:  msg.Data,
 		},
+	}
+	m := pcontext.ToMap(ctx)
+	if len(m) > 0 {
+		b, err := util.GobEncode(m)
+		if err != nil {
+			// TODO: handle err
+		}
+		req.Metadata = b
 	}
 	if ns.server.Frontend {
 		req.FrontendID = ns.server.ID
@@ -120,6 +132,7 @@ func (ns *NatsRPCClient) buildRequest(
 
 // Call calls a method remotally
 func (ns *NatsRPCClient) Call(
+	ctx context.Context,
 	rpcType protos.RPCType,
 	route *route.Route,
 	session *session.Session,
@@ -129,7 +142,7 @@ func (ns *NatsRPCClient) Call(
 	if !ns.running {
 		return nil, constants.ErrRPCClientNotInitialized
 	}
-	req := ns.buildRequest(rpcType, route, session, msg)
+	req := ns.buildRequest(ctx, rpcType, route, session, msg)
 	marshalledData, err := proto.Marshal(&req)
 	if err != nil {
 		return nil, err
