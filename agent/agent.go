@@ -30,7 +30,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/topfreegames/pitaya/constants"
 	"github.com/topfreegames/pitaya/internal/codec"
 	"github.com/topfreegames/pitaya/internal/message"
@@ -160,21 +159,16 @@ func (a *Agent) ResponseMID(ctx context.Context, mid uint, v interface{}, isErro
 	err := false
 	if len(isError) > 0 {
 		err = isError[0]
-		// TODO camila how to log error ?
 	}
 	if a.GetStatus() == constants.StatusClosed {
 		err := constants.ErrBrokenPipe
-		span := opentracing.SpanFromContext(ctx)
-		jaeger.LogError(span, err.Error())
-		span.Finish()
+		jaeger.FinishSpan(ctx, err)
 		return err
 	}
 
 	if mid <= 0 {
 		err := constants.ErrSessionOnNotify
-		span := opentracing.SpanFromContext(ctx)
-		jaeger.LogError(span, err.Error())
-		span.Finish()
+		jaeger.FinishSpan(ctx, err)
 		return err
 	}
 
@@ -322,21 +316,12 @@ func (a *Agent) write() {
 	for {
 		select {
 		case data := <-a.chSend:
-			if data.ctx == nil {
-				// push message, ignore
-				// TODO camila noooo
-				data.ctx = context.Background()
-			}
-			span := opentracing.SpanFromContext(data.ctx)
 			payload, err := util.SerializeOrRaw(a.serializer, data.payload)
 			if err != nil {
 				logger.Log.Error(err.Error())
 				payload, err = util.GetErrorPayload(a.serializer, err)
 				if err != nil {
-					if span != nil {
-						jaeger.LogError(span, err.Error())
-						span.Finish()
-					}
+					jaeger.FinishSpan(data.ctx, err)
 					logger.Log.Error("cannot serialize message and respond to the client ", err.Error())
 					break
 				}
@@ -352,10 +337,7 @@ func (a *Agent) write() {
 			}
 			em, err := a.messageEncoder.Encode(m)
 			if err != nil {
-				if span != nil {
-					jaeger.LogError(span, err.Error())
-					span.Finish()
-				}
+				jaeger.FinishSpan(data.ctx, err)
 				logger.Log.Error(err.Error())
 				break
 			}
@@ -363,25 +345,17 @@ func (a *Agent) write() {
 			// packet encode
 			p, err := a.encoder.Encode(packet.Data, em)
 			if err != nil {
-				if span != nil {
-					jaeger.LogError(span, err.Error())
-					span.Finish()
-				}
+				jaeger.FinishSpan(data.ctx, err)
 				logger.Log.Error(err)
 				break
 			}
 			// close agent if low-level Conn broken
 			if _, err := a.conn.Write(p); err != nil {
-				if span != nil {
-					jaeger.LogError(span, err.Error())
-					span.Finish()
-				}
+				jaeger.FinishSpan(data.ctx, err)
 				logger.Log.Error(err.Error())
 				return
 			}
-			if span != nil {
-				span.Finish()
-			}
+			jaeger.FinishSpan(data.ctx, nil)
 		case <-a.chStopWrite:
 			return
 		}

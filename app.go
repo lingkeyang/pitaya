@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/spf13/viper"
 	"github.com/topfreegames/pitaya/acceptor"
 	"github.com/topfreegames/pitaya/cluster"
@@ -419,4 +420,10 @@ func AddToPropagateCtx(ctx context.Context, key string, val interface{}) context
 // GetFromPropagateCtx adds a key and value that came through RPC calls
 func GetFromPropagateCtx(ctx context.Context, key string) interface{} {
 	return pcontext.GetFromPropagateCtx(ctx, key)
+}
+
+// GetSpanContext retrieves an opentracing span context from the given context
+// The span context can be received directly or via an RPC call
+func GetSpanContext(ctx context.Context) (opentracing.SpanContext, error) {
+	return pcontext.GetSpanContext(ctx)
 }

@@ -21,7 +21,6 @@
 package cluster
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -35,10 +34,10 @@ import (
 	"github.com/topfreegames/pitaya/errors"
 	"github.com/topfreegames/pitaya/internal/message"
 	"github.com/topfreegames/pitaya/jaeger"
+	"github.com/topfreegames/pitaya/logger"
 	"github.com/topfreegames/pitaya/protos"
 	"github.com/topfreegames/pitaya/route"
 	"github.com/topfreegames/pitaya/session"
-	"github.com/topfreegames/pitaya/util"
 )
 
 // NatsRPCClient struct
@@ -90,7 +89,7 @@ func (ns *NatsRPCClient) buildRequest(
 	route *route.Route,
 	session *session.Session,
 	msg *message.Message,
-) protos.Request {
+) (protos.Request, error) {
 	req := protos.Request{
 		Type: rpcType,
 		Msg: &protos.Msg{
@@ -98,21 +97,13 @@ func (ns *NatsRPCClient) buildRequest(
 			Data:  msg.Data,
 		},
 	}
-	span := opentracing.SpanFromContext(ctx)
-	spanData := new(bytes.Buffer)
-	tracer := opentracing.GlobalTracer()
-	err := tracer.Inject(span.Context(), opentracing.Binary, spanData)
+	ctx, err := pcontext.InjectSpan(ctx)
 	if err != nil {
-		// TODO camila handle
+		logger.Log.Errorf("failed to inject span", err)
 	}
-	ctx = pcontext.AddToPropagateCtx(ctx, constants.SpanPropagateCtxKey, spanData.Bytes())
-	m := pcontext.ToMap(ctx)
-	if len(m) > 0 {
-		b, err := util.GobEncode(m)
-		if err != nil {
-			// TODO camila handle err
-		}
-		req.Metadata = b
+	req.Metadata, err = pcontext.Encode(ctx)
+	if err != nil {
+		return req, err
 	}
 	if ns.server.Frontend {
 		req.FrontendID = ns.server.ID
@@ -138,7 +129,7 @@ func (ns *NatsRPCClient) buildRequest(
 		}
 	}
 
-	return req
+	return req, nil
 }
 
 // Call calls a method remotally
@@ -150,51 +141,40 @@ func (ns *NatsRPCClient) Call(
 	msg *message.Message,
 	server *Server,
 ) (*protos.Response, error) {
+	parent, err := pcontext.GetSpanContext(ctx)
+	if err != nil {
+		logger.Log.Errorf("failed to retrieve parent span: %s", err.Error())
+	}
+	tags := opentracing.Tags{"span.kind": "client"}
+	_, ctx = jaeger.StartSpan(ctx, "RPC Call", tags, parent)
+	// TODO camila use defer
+	// defer jaeger.FinishSpan(ctx, err)
+
 	if !ns.running {
-		return nil, constants.ErrRPCClientNotInitialized
+		err := constants.ErrRPCClientNotInitialized
+		jaeger.FinishSpan(ctx, err)
+		return nil, err
 	}
-	// TODO camila not sure if necessary (redundant - remove)
-	var parentSpanCtx opentracing.SpanContext
-	parentSpan := opentracing.SpanFromContext(ctx)
-	if parentSpan == nil {
-		// TODO camila WTF there must be a better way
-		spanData := pcontext.GetFromPropagateCtx(ctx, constants.SpanPropagateCtxKey).([]byte)
-		tracer := opentracing.GlobalTracer()
-		var err error
-		parentSpanCtx, err = tracer.Extract(opentracing.Binary, bytes.NewBuffer(spanData))
-		if err != nil {
-			// TODO camila handle
-		}
-	} else {
-		parentSpanCtx = parentSpan.Context()
+	req, err := ns.buildRequest(ctx, rpcType, route, session, msg)
+	if err != nil {
+		jaeger.FinishSpan(ctx, err)
+		return nil, err
 	}
-	tags := opentracing.Tags{
-		"span.kind":     "client",
-		"pitaya.source": "local-id", // TODO camila
-		"pitaya.remote": server.ID,
-	}
-
-	reference := opentracing.ChildOf(parentSpanCtx)
-	span := opentracing.StartSpan(route.String(), reference, tags)
-	defer span.Finish()
-
-	ctx = opentracing.ContextWithSpan(ctx, span)
-	req := ns.buildRequest(ctx, rpcType, route, session, msg)
 	marshalledData, err := proto.Marshal(&req)
 	if err != nil {
+		jaeger.FinishSpan(ctx, err)
 		return nil, err
 	}
 	m, err := ns.conn.Request(getChannel(server.Type, server.ID), marshalledData, ns.reqTimeout)
 	if err != nil {
-		jaeger.LogError(span, err.Error())
+		jaeger.FinishSpan(ctx, err)
 		return nil, err
 	}
 
 	res := &protos.Response{}
 	err = proto.Unmarshal(m.Data, res)
-
 	if err != nil {
-		jaeger.LogError(span, err.Error())
+		jaeger.FinishSpan(ctx, err)
 		return nil, err
 	}
 
@@ -202,14 +182,15 @@ func (ns *NatsRPCClient) Call(
 		if res.Error.Code == "" {
 			res.Error.Code = errors.ErrUnknownCode
 		}
-		jaeger.LogError(span, res.Error.Msg)
 		err := &errors.Error{
 			Code:     res.Error.Code,
 			Message:  res.Error.Msg,
 			Metadata: res.Error.Metadata,
 		}
+		jaeger.FinishSpan(ctx, err)
 		return nil, err
 	}
+	jaeger.FinishSpan(ctx, nil)
 	return res, nil
 }
 

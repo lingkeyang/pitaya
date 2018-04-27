@@ -1,7 +1,6 @@
 package services
 
 import (
-	"bytes"
 	"context"
 	"encoding/gob"
 	"fmt"
@@ -11,8 +10,6 @@ import (
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/topfreegames/pitaya"
 	"github.com/topfreegames/pitaya/component"
-	"github.com/topfreegames/pitaya/constants"
-	pcontext "github.com/topfreegames/pitaya/context"
 	"github.com/topfreegames/pitaya/timer"
 )
 
@@ -105,19 +102,9 @@ func (r *Room) AfterInit() {
 
 // Entry is the entrypoint
 func (r *Room) Entry(ctx context.Context, msg []byte) (*JoinResponse, error) {
-	var parentSpanCtx opentracing.SpanContext
-	parentSpan := opentracing.SpanFromContext(ctx)
-	if parentSpan == nil {
-		// TODO camila WTF there must be a better way
-		spanData := pcontext.GetFromPropagateCtx(ctx, constants.SpanPropagateCtxKey).([]byte)
-		tracer := opentracing.GlobalTracer()
-		var err error
-		parentSpanCtx, err = tracer.Extract(opentracing.Binary, bytes.NewBuffer(spanData))
-		if err != nil {
-			// TODO camila handle
-		}
-	} else {
-		parentSpanCtx = parentSpan.Context()
+	parentSpanCtx, err := pitaya.GetSpanContext(ctx)
+	if err != nil {
+		return nil, pitaya.Error(err, "RH-001", map[string]string{"failed": "span from context"})
 	}
 	tags1 := opentracing.Tags{
 		"span.kind":    "client",
@@ -141,7 +128,7 @@ func (r *Room) Entry(ctx context.Context, msg []byte) (*JoinResponse, error) {
 	span2.Finish()
 
 	s := pitaya.GetSessionFromCtx(ctx)
-	err := s.Bind(ctx, strconv.Itoa(int(s.ID())))
+	err = s.Bind(ctx, strconv.Itoa(int(s.ID())))
 	if err != nil {
 		return nil, pitaya.Error(err, "RH-000", map[string]string{"failed": "bind"})
 	}

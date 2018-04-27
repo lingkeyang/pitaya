@@ -24,6 +24,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/opentracing/opentracing-go"
@@ -236,12 +237,12 @@ func (h *HandlerService) processPacket(a *agent.Agent, p *packet.Packet) error {
 func (h *HandlerService) processMessage(a *agent.Agent, msg *message.Message) {
 	tags := opentracing.Tags{
 		"span.kind": "server",
+		"msg.type":  strings.ToLower(msg.Type.String()),
 	}
+	_, ctx := jaeger.StartSpan(context.Background(), msg.Route, tags)
 
 	r, err := route.Decode(msg.Route)
 	if err != nil {
-		span := opentracing.StartSpan(msg.Route, opentracing.ChildOf(nil), tags)
-		ctx := opentracing.ContextWithSpan(context.Background(), span)
 		logger.Log.Error(err.Error())
 		a.AnswerWithError(ctx, msg.ID, e.NewError(err, e.ErrBadRequestCode))
 		return
@@ -251,8 +252,6 @@ func (h *HandlerService) processMessage(a *agent.Agent, msg *message.Message) {
 		r.SvType = h.server.Type
 	}
 
-	span := opentracing.StartSpan(r.String(), opentracing.ChildOf(nil), tags)
-	ctx := opentracing.ContextWithSpan(context.Background(), span)
 	message := unhandledMessage{
 		ctx:   ctx,
 		agent: a,
@@ -288,11 +287,7 @@ func (h *HandlerService) localProcess(ctx context.Context, a *agent.Agent, route
 			a.Session.ResponseMID(ctx, mid, ret)
 		}
 	} else {
-		span := opentracing.SpanFromContext(ctx)
-		if err != nil {
-			jaeger.LogError(span, err.Error())
-		}
-		span.Finish()
+		jaeger.FinishSpan(ctx, err)
 	}
 }
 

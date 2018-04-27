@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -84,26 +85,34 @@ func NewRemoteService(
 
 var remotes = make(map[string]*component.Remote) // all remote method
 
-func (r *RemoteService) remoteProcess(ctx context.Context, server *cluster.Server, a *agent.Agent, route *route.Route, msg *message.Message) {
-	var res *protos.Response
-	var err error
-	if res, err = r.remoteCall(ctx, server, protos.RPCType_Sys, route, a.Session, msg); err != nil {
-		logger.Log.Errorf(err.Error())
-		a.AnswerWithError(ctx, msg.ID, err)
-		return
-	}
-	if msg.Type == message.Request {
+func (r *RemoteService) remoteProcess(
+	ctx context.Context,
+	server *cluster.Server,
+	a *agent.Agent,
+	route *route.Route,
+	msg *message.Message,
+) {
+	res, err := r.remoteCall(ctx, server, protos.RPCType_Sys, route, a.Session, msg)
+	switch msg.Type {
+	case message.Request:
+		if err != nil {
+			logger.Log.Error(err)
+			a.AnswerWithError(ctx, msg.ID, err)
+			return
+		}
 		err := a.Session.ResponseMID(ctx, msg.ID, res.Data)
 		if err != nil {
 			logger.Log.Error(err)
 			a.AnswerWithError(ctx, msg.ID, err)
 		}
-	} else {
-		span := opentracing.SpanFromContext(ctx)
-		defer span.Finish()
-		if res.Error != nil {
-			jaeger.LogError(span, res.Error.Msg)
-			logger.Log.Errorf("error while sending a notify: %s", res.Error.GetMsg())
+
+	case message.Notify:
+		defer jaeger.FinishSpan(ctx, err)
+		if err == nil && res.Error != nil {
+			err = errors.New(res.Error.GetMsg())
+		}
+		if err != nil {
+			logger.Log.Errorf("error while sending a notify: %s", err.Error())
 		}
 	}
 }
@@ -182,11 +191,7 @@ func (r *RemoteService) ProcessRemoteMessages(threadID int) {
 	// TODO need to monitor stuff here to guarantee messages are not being dropped
 	for req := range r.rpcServer.GetUnhandledRequestsChannel() {
 		logger.Log.Debugf("(%d) processing message %v", threadID, req.GetMsg().GetID())
-		m := req.GetMetadata()
-		ctxMap := map[string]interface{}{}
-		args := make([]interface{}, 0)
-		err := gob.NewDecoder(bytes.NewReader(m)).Decode(&args)
-		ctxMap = args[0].(map[string]interface{})
+		ctx, err := pcontext.Decode(req.GetMetadata())
 		if err != nil {
 			response := &protos.Response{
 				Error: &protos.Error{
@@ -194,29 +199,18 @@ func (r *RemoteService) ProcessRemoteMessages(threadID int) {
 					Msg:  err.Error(),
 				},
 			}
-			r.sendReply(req.GetMsg().GetReply(), response)
+			r.sendReply(ctx, req.GetMsg().GetReply(), response)
 			continue
 		}
-		ctx := pcontext.FromMap(ctxMap)
-		spanData := pcontext.GetFromPropagateCtx(ctx, constants.SpanPropagateCtxKey).([]byte)
-		tracer := opentracing.GlobalTracer()
-		parent, err := tracer.Extract(opentracing.Binary, bytes.NewBuffer(spanData))
+		parent, err := pcontext.GetSpanContext(ctx)
 		if err != nil {
-			// TODO camila handle
+			logger.Log.Errorf("failed to retrieve parent span: %s", err.Error())
 		}
-		// TODO camila this will need to be extracted from the carrier
-		tags := opentracing.Tags{
-			"span.kind": "server",
-			// "pitaya.source": "local-id", // TODO camila
-			// "pitaya.remote": server.ID,
-		}
+		tags := opentracing.Tags{"span.kind": "server"}
+		_, ctx = jaeger.StartSpan(ctx, req.GetMsg().GetRoute(), tags, parent)
 
-		reference := opentracing.ChildOf(parent)
 		rt, err := route.Decode(req.GetMsg().GetRoute())
 		if err != nil {
-			span := opentracing.StartSpan(req.GetMsg().GetRoute(), reference, tags)
-			defer span.Finish()
-			jaeger.LogError(span, err.Error())
 			response := &protos.Response{
 				Error: &protos.Error{
 					Code: e.ErrBadRequestCode,
@@ -226,11 +220,9 @@ func (r *RemoteService) ProcessRemoteMessages(threadID int) {
 					},
 				},
 			}
-			r.sendReply(req.GetMsg().GetReply(), response)
+			r.sendReply(ctx, req.GetMsg().GetReply(), response)
 			continue
 		}
-		span := opentracing.StartSpan(rt.String(), reference, tags)
-		defer span.Finish()
 
 		switch {
 		case req.Type == protos.RPCType_Sys:
@@ -258,7 +250,7 @@ func (r *RemoteService) handleRPCUser(ctx context.Context, req *protos.Request, 
 				},
 			},
 		}
-		r.sendReply(reply, response)
+		r.sendReply(ctx, reply, response)
 		return
 	}
 	params := []reflect.Value{remote.Receiver}
@@ -271,7 +263,7 @@ func (r *RemoteService) handleRPCUser(ctx context.Context, req *protos.Request, 
 					Msg:  err.Error(),
 				},
 			}
-			r.sendReply(reply, response)
+			r.sendReply(ctx, reply, response)
 			return
 		}
 		for _, arg := range args {
@@ -293,7 +285,7 @@ func (r *RemoteService) handleRPCUser(ctx context.Context, req *protos.Request, 
 				response.Error.Metadata = val.Metadata
 			}
 		}
-		r.sendReply(reply, response)
+		r.sendReply(ctx, reply, response)
 		return
 	}
 
@@ -306,13 +298,13 @@ func (r *RemoteService) handleRPCUser(ctx context.Context, req *protos.Request, 
 					Msg:  err.Error(),
 				},
 			}
-			r.sendReply(reply, response)
+			r.sendReply(ctx, reply, response)
 			return
 		}
 	}
 
 	response.Data = buf.Bytes()
-	r.sendReply(reply, response)
+	r.sendReply(ctx, reply, response)
 }
 
 func (r *RemoteService) handleRPCSys(ctx context.Context, req *protos.Request, rt *route.Route) {
@@ -338,7 +330,7 @@ func (r *RemoteService) handleRPCSys(ctx context.Context, req *protos.Request, r
 				Msg:  err.Error(),
 			},
 		}
-		r.sendReply(reply, response)
+		r.sendReply(ctx, reply, response)
 		return
 	}
 
@@ -360,10 +352,10 @@ func (r *RemoteService) handleRPCSys(ctx context.Context, req *protos.Request, r
 	} else {
 		response = &protos.Response{Data: ret}
 	}
-	r.sendReply(reply, response)
+	r.sendReply(ctx, reply, response)
 }
 
-func (r *RemoteService) sendReply(reply string, response *protos.Response) {
+func (r *RemoteService) sendReply(ctx context.Context, reply string, response *protos.Response) {
 	p, err := proto.Marshal(response)
 	if err != nil {
 		response := &protos.Response{
@@ -374,6 +366,11 @@ func (r *RemoteService) sendReply(reply string, response *protos.Response) {
 		}
 		p, _ = proto.Marshal(response)
 	}
+
+	if err == nil && response.Error != nil {
+		err = errors.New(response.Error.Msg)
+	}
+	defer jaeger.FinishSpan(ctx, err)
 	r.rpcClient.Send(reply, p)
 }
 
