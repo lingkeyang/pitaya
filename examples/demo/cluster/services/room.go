@@ -186,7 +186,7 @@ func (r *Room) Message(ctx context.Context, msg *UserMessage) {
 // SendRPC sends rpc
 func (r *Room) SendRPC(ctx context.Context, msg *SendRPCMsg) (*RPCResponse, error) {
 	ret := &RPCResponse{Msg: "ok"}
-	err := pitaya.RPCTo(msg.ServerID, msg.Route, ret, msg.Msg)
+	err := pitaya.RPCTo(ctx, msg.ServerID, msg.Route, ret, msg.Msg)
 	if err != nil {
 		return nil, pitaya.Error(err, "RPC-000")
 	}

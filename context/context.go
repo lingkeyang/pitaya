@@ -72,7 +72,7 @@ func Encode(ctx context.Context) ([]byte, error) {
 // Decode returns a context given a binary encoded message
 func Decode(m []byte) (context.Context, error) {
 	if len(m) == 0 {
-		// TODO camila are you sure?
+		// TODO maybe return an error
 		return nil, nil
 	}
 	ctxMap := map[string]interface{}{}

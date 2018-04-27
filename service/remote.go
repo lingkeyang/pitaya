@@ -234,7 +234,6 @@ func (r *RemoteService) ProcessRemoteMessages(threadID int) {
 }
 
 func (r *RemoteService) handleRPCUser(ctx context.Context, req *protos.Request, rt *route.Route) {
-	// TODO camila wtf pra que serve o ctx aqui ??
 	reply := req.GetMsg().GetReply()
 	response := &protos.Response{}
 

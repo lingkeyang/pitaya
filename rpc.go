@@ -29,16 +29,16 @@ import (
 )
 
 // RPC calls a method in a different server
-func RPC(routeStr string, reply interface{}, args ...interface{}) error {
-	return doSendRPC("", routeStr, reply, args...)
+func RPC(ctx context.Context, routeStr string, reply interface{}, args ...interface{}) error {
+	return doSendRPC(ctx, "", routeStr, reply, args...)
 }
 
 // RPCTo send a rpc to a specific server
-func RPCTo(serverID, routeStr string, reply interface{}, args ...interface{}) error {
-	return doSendRPC(serverID, routeStr, reply, args...)
+func RPCTo(ctx context.Context, serverID, routeStr string, reply interface{}, args ...interface{}) error {
+	return doSendRPC(ctx, serverID, routeStr, reply, args...)
 }
 
-func doSendRPC(serverID, routeStr string, reply interface{}, args ...interface{}) error {
+func doSendRPC(ctx context.Context, serverID, routeStr string, reply interface{}, args ...interface{}) error {
 	if app.rpcServer == nil {
 		return constants.ErrRPCServerNotInitialized
 	}
@@ -60,8 +60,5 @@ func doSendRPC(serverID, routeStr string, reply interface{}, args ...interface{}
 		return constants.ErrNonsenseRPC
 	}
 
-	// TODO camila get ctx from somewhere
-	ctx := context.Background()
 	return remoteService.RPC(ctx, serverID, r, reply, args...)
-
 }

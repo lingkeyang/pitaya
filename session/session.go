@@ -544,47 +544,15 @@ func (s *Session) Value(key string) interface{} {
 }
 
 func (s *Session) bindInFront(ctx context.Context) error {
-	sessionData := &Data{
-		ID:  s.frontendSessionID,
-		UID: s.uid,
-	}
-	m := pcontext.ToMap(ctx)
-	b, err := util.GobEncode(m, sessionData)
-	if err != nil {
-		return err
-	}
-	res, err := s.entity.SendRequest(ctx, s.frontendID, constants.SessionBindRoute, b)
-	if err != nil {
-		return err
-	}
-	logger.Log.Debug("session/bindInFront Got response: ", res.Data)
-	return nil
-
+	return s.sendRequestToFront(ctx, constants.SessionBindRoute, false)
 }
 
 // PushToFront updates the session in the frontend
 func (s *Session) PushToFront(ctx context.Context) error {
-	// TODO camila pq nao usar o fluxo padrao de chamadas rpc user ?
 	if s.IsFrontend {
 		return constants.ErrFrontSessionCantPushToFront
 	}
-	sessionData := &Data{
-		ID:   s.frontendSessionID,
-		UID:  s.uid,
-		Data: s.data,
-	}
-
-	m := pcontext.ToMap(ctx)
-	b, err := util.GobEncode(m, sessionData)
-	if err != nil {
-		return err
-	}
-	res, err := s.entity.SendRequest(ctx, s.frontendID, constants.SessionPushRoute, b)
-	if err != nil {
-		return err
-	}
-	logger.Log.Debug("session/PushToFront Got response: ", res)
-	return nil
+	return s.sendRequestToFront(ctx, constants.SessionPushRoute, true)
 }
 
 // Clear releases all data related to current session
@@ -597,5 +565,23 @@ func (s *Session) Clear() {
 	s.updateEncodedData()
 }
 
-func buildRequestToFront() {
+func (s *Session) sendRequestToFront(ctx context.Context, route string, includeData bool) error {
+	sessionData := &Data{
+		ID:  s.frontendSessionID,
+		UID: s.uid,
+	}
+	if includeData {
+		sessionData.Data = s.data
+	}
+	m := pcontext.ToMap(ctx)
+	b, err := util.GobEncode(m, sessionData)
+	if err != nil {
+		return err
+	}
+	res, err := s.entity.SendRequest(ctx, s.frontendID, route, b)
+	if err != nil {
+		return err
+	}
+	logger.Log.Debugf("%s Got response: %+v", route, res)
+	return nil
 }

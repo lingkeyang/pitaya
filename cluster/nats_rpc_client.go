@@ -147,34 +147,28 @@ func (ns *NatsRPCClient) Call(
 	}
 	tags := opentracing.Tags{"span.kind": "client"}
 	_, ctx = jaeger.StartSpan(ctx, "RPC Call", tags, parent)
-	// TODO camila use defer
-	// defer jaeger.FinishSpan(ctx, err)
+	defer jaeger.FinishSpan(ctx, err)
 
 	if !ns.running {
-		err := constants.ErrRPCClientNotInitialized
-		jaeger.FinishSpan(ctx, err)
+		err = constants.ErrRPCClientNotInitialized
 		return nil, err
 	}
 	req, err := ns.buildRequest(ctx, rpcType, route, session, msg)
 	if err != nil {
-		jaeger.FinishSpan(ctx, err)
 		return nil, err
 	}
 	marshalledData, err := proto.Marshal(&req)
 	if err != nil {
-		jaeger.FinishSpan(ctx, err)
 		return nil, err
 	}
 	m, err := ns.conn.Request(getChannel(server.Type, server.ID), marshalledData, ns.reqTimeout)
 	if err != nil {
-		jaeger.FinishSpan(ctx, err)
 		return nil, err
 	}
 
 	res := &protos.Response{}
 	err = proto.Unmarshal(m.Data, res)
 	if err != nil {
-		jaeger.FinishSpan(ctx, err)
 		return nil, err
 	}
 
@@ -182,15 +176,13 @@ func (ns *NatsRPCClient) Call(
 		if res.Error.Code == "" {
 			res.Error.Code = errors.ErrUnknownCode
 		}
-		err := &errors.Error{
+		err = &errors.Error{
 			Code:     res.Error.Code,
 			Message:  res.Error.Msg,
 			Metadata: res.Error.Metadata,
 		}
-		jaeger.FinishSpan(ctx, err)
 		return nil, err
 	}
-	jaeger.FinishSpan(ctx, nil)
 	return res, nil
 }
 
