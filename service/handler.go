@@ -26,6 +26,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/opentracing/opentracing-go"
 	"github.com/topfreegames/pitaya/agent"
 	"github.com/topfreegames/pitaya/cluster"
 	"github.com/topfreegames/pitaya/component"
@@ -34,6 +35,7 @@ import (
 	"github.com/topfreegames/pitaya/internal/codec"
 	"github.com/topfreegames/pitaya/internal/message"
 	"github.com/topfreegames/pitaya/internal/packet"
+	"github.com/topfreegames/pitaya/jaeger"
 	"github.com/topfreegames/pitaya/logger"
 	"github.com/topfreegames/pitaya/route"
 	"github.com/topfreegames/pitaya/serialize"
@@ -221,8 +223,7 @@ func (h *HandlerService) processPacket(a *agent.Agent, p *packet.Packet) error {
 		if err != nil {
 			return err
 		}
-		// TODO camila use jaeger here
-		h.processMessage(context.Background(), a, msg)
+		h.processMessage(a, msg)
 
 	case packet.Heartbeat:
 		// expected
@@ -232,11 +233,17 @@ func (h *HandlerService) processPacket(a *agent.Agent, p *packet.Packet) error {
 	return nil
 }
 
-func (h *HandlerService) processMessage(ctx context.Context, a *agent.Agent, msg *message.Message) {
+func (h *HandlerService) processMessage(a *agent.Agent, msg *message.Message) {
+	tags := opentracing.Tags{
+		"span.kind": "server",
+	}
+
 	r, err := route.Decode(msg.Route)
 	if err != nil {
+		span := opentracing.StartSpan(msg.Route, opentracing.ChildOf(nil), tags)
+		ctx := opentracing.ContextWithSpan(context.Background(), span)
 		logger.Log.Error(err.Error())
-		a.AnswerWithError(msg.ID, e.NewError(err, e.ErrBadRequestCode))
+		a.AnswerWithError(ctx, msg.ID, e.NewError(err, e.ErrBadRequestCode))
 		return
 	}
 
@@ -244,6 +251,8 @@ func (h *HandlerService) processMessage(ctx context.Context, a *agent.Agent, msg
 		r.SvType = h.server.Type
 	}
 
+	span := opentracing.StartSpan(r.String(), opentracing.ChildOf(nil), tags)
+	ctx := opentracing.ContextWithSpan(context.Background(), span)
 	message := unhandledMessage{
 		ctx:   ctx,
 		agent: a,
@@ -271,11 +280,19 @@ func (h *HandlerService) localProcess(ctx context.Context, a *agent.Agent, route
 	}
 
 	ret, err := processHandlerMessage(ctx, route, h.serializer, a.Session, msg.Data, msg.Type, false)
-	if err != nil {
-		logger.Log.Error(err)
-		a.AnswerWithError(mid, err)
+	if msg.Type != message.Notify {
+		if err != nil {
+			logger.Log.Error(err)
+			a.AnswerWithError(ctx, mid, err)
+		} else {
+			a.Session.ResponseMID(ctx, mid, ret)
+		}
 	} else {
-		a.Session.ResponseMID(mid, ret)
+		span := opentracing.SpanFromContext(ctx)
+		if err != nil {
+			jaeger.LogError(span, err.Error())
+		}
+		span.Finish()
 	}
 }
 

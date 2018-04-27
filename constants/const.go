@@ -43,6 +43,12 @@ const (
 // SessionCtxKey is the context key where the session will be set
 var SessionCtxKey = "session"
 
+type propagateKey struct{}
+
 // PropagateCtxKey is the context key where the content that will be
 // propagated through rpc calls is set
-var PropagateCtxKey = "propagate"
+var PropagateCtxKey = propagateKey{}
+
+// SpanPropagateCtxKey is the key holding the opentracing spans inside
+// the propagate key
+var SpanPropagateCtxKey = "opentracing-span"

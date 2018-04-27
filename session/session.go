@@ -40,10 +40,10 @@ import (
 // NetworkEntity represent low-level network instance
 type NetworkEntity interface {
 	Push(route string, v interface{}) error
-	ResponseMID(mid uint, v interface{}, isError ...bool) error
+	ResponseMID(ctx context.Context, mid uint, v interface{}, isError ...bool) error
 	Close() error
 	RemoteAddr() net.Addr
-	SendRequest(serverID, route string, v interface{}) (*protos.Response, error)
+	SendRequest(ctx context.Context, serverID, route string, v interface{}) (*protos.Response, error)
 }
 
 var (
@@ -153,8 +153,8 @@ func (s *Session) Push(route string, v interface{}) error {
 
 // ResponseMID responses message to client, mid is
 // request message ID
-func (s *Session) ResponseMID(mid uint, v interface{}, err ...bool) error {
-	return s.entity.ResponseMID(mid, v, err...)
+func (s *Session) ResponseMID(ctx context.Context, mid uint, v interface{}, err ...bool) error {
+	return s.entity.ResponseMID(ctx, mid, v, err...)
 }
 
 // ID returns the session id
@@ -548,11 +548,12 @@ func (s *Session) bindInFront(ctx context.Context) error {
 		ID:  s.frontendSessionID,
 		UID: s.uid,
 	}
-	b, err := util.GobEncode(sessionData)
+	m := pcontext.ToMap(ctx)
+	b, err := util.GobEncode(m, sessionData)
 	if err != nil {
 		return err
 	}
-	res, err := s.entity.SendRequest(s.frontendID, constants.SessionBindRoute, b)
+	res, err := s.entity.SendRequest(ctx, s.frontendID, constants.SessionBindRoute, b)
 	if err != nil {
 		return err
 	}
@@ -563,7 +564,7 @@ func (s *Session) bindInFront(ctx context.Context) error {
 
 // PushToFront updates the session in the frontend
 func (s *Session) PushToFront(ctx context.Context) error {
-	// TODO pq nao usar o fluxo padrao de chamadas rpc user ?
+	// TODO camila pq nao usar o fluxo padrao de chamadas rpc user ?
 	if s.IsFrontend {
 		return constants.ErrFrontSessionCantPushToFront
 	}
@@ -578,7 +579,7 @@ func (s *Session) PushToFront(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	res, err := s.entity.SendRequest(s.frontendID, constants.SessionPushRoute, b)
+	res, err := s.entity.SendRequest(ctx, s.frontendID, constants.SessionPushRoute, b)
 	if err != nil {
 		return err
 	}
@@ -594,4 +595,7 @@ func (s *Session) Clear() {
 	s.uid = ""
 	s.data = map[string]interface{}{}
 	s.updateEncodedData()
+}
+
+func buildRequestToFront() {
 }

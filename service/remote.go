@@ -28,6 +28,7 @@ import (
 	"reflect"
 
 	"github.com/gogo/protobuf/proto"
+	opentracing "github.com/opentracing/opentracing-go"
 
 	"github.com/topfreegames/pitaya/agent"
 	"github.com/topfreegames/pitaya/cluster"
@@ -37,6 +38,7 @@ import (
 	e "github.com/topfreegames/pitaya/errors"
 	"github.com/topfreegames/pitaya/internal/codec"
 	"github.com/topfreegames/pitaya/internal/message"
+	"github.com/topfreegames/pitaya/jaeger"
 	"github.com/topfreegames/pitaya/logger"
 	"github.com/topfreegames/pitaya/protos"
 	"github.com/topfreegames/pitaya/route"
@@ -87,17 +89,22 @@ func (r *RemoteService) remoteProcess(ctx context.Context, server *cluster.Serve
 	var err error
 	if res, err = r.remoteCall(ctx, server, protos.RPCType_Sys, route, a.Session, msg); err != nil {
 		logger.Log.Errorf(err.Error())
-		a.AnswerWithError(msg.ID, err)
+		a.AnswerWithError(ctx, msg.ID, err)
 		return
 	}
 	if msg.Type == message.Request {
-		err := a.Session.ResponseMID(msg.ID, res.Data)
+		err := a.Session.ResponseMID(ctx, msg.ID, res.Data)
 		if err != nil {
 			logger.Log.Error(err)
-			a.AnswerWithError(msg.ID, err)
+			a.AnswerWithError(ctx, msg.ID, err)
 		}
-	} else if res.Error != nil {
-		logger.Log.Errorf("error while sending a notify: %s", res.Error.GetMsg())
+	} else {
+		span := opentracing.SpanFromContext(ctx)
+		defer span.Finish()
+		if res.Error != nil {
+			jaeger.LogError(span, res.Error.Msg)
+			logger.Log.Errorf("error while sending a notify: %s", res.Error.GetMsg())
+		}
 	}
 }
 
@@ -175,8 +182,41 @@ func (r *RemoteService) ProcessRemoteMessages(threadID int) {
 	// TODO need to monitor stuff here to guarantee messages are not being dropped
 	for req := range r.rpcServer.GetUnhandledRequestsChannel() {
 		logger.Log.Debugf("(%d) processing message %v", threadID, req.GetMsg().GetID())
+		m := req.GetMetadata()
+		ctxMap := map[string]interface{}{}
+		args := make([]interface{}, 0)
+		err := gob.NewDecoder(bytes.NewReader(m)).Decode(&args)
+		ctxMap = args[0].(map[string]interface{})
+		if err != nil {
+			response := &protos.Response{
+				Error: &protos.Error{
+					Code: e.ErrInternalCode,
+					Msg:  err.Error(),
+				},
+			}
+			r.sendReply(req.GetMsg().GetReply(), response)
+			continue
+		}
+		ctx := pcontext.FromMap(ctxMap)
+		spanData := pcontext.GetFromPropagateCtx(ctx, constants.SpanPropagateCtxKey).([]byte)
+		tracer := opentracing.GlobalTracer()
+		parent, err := tracer.Extract(opentracing.Binary, bytes.NewBuffer(spanData))
+		if err != nil {
+			// TODO camila handle
+		}
+		// TODO camila this will need to be extracted from the carrier
+		tags := opentracing.Tags{
+			"span.kind": "server",
+			// "pitaya.source": "local-id", // TODO camila
+			// "pitaya.remote": server.ID,
+		}
+
+		reference := opentracing.ChildOf(parent)
 		rt, err := route.Decode(req.GetMsg().GetRoute())
 		if err != nil {
+			span := opentracing.StartSpan(req.GetMsg().GetRoute(), reference, tags)
+			defer span.Finish()
+			jaeger.LogError(span, err.Error())
 			response := &protos.Response{
 				Error: &protos.Error{
 					Code: e.ErrBadRequestCode,
@@ -189,17 +229,20 @@ func (r *RemoteService) ProcessRemoteMessages(threadID int) {
 			r.sendReply(req.GetMsg().GetReply(), response)
 			continue
 		}
+		span := opentracing.StartSpan(rt.String(), reference, tags)
+		defer span.Finish()
 
 		switch {
 		case req.Type == protos.RPCType_Sys:
-			r.handleRPCSys(req, rt)
+			r.handleRPCSys(ctx, req, rt)
 		case req.Type == protos.RPCType_User:
-			r.handleRPCUser(req, rt)
+			r.handleRPCUser(ctx, req, rt)
 		}
 	}
 }
 
-func (r *RemoteService) handleRPCUser(req *protos.Request, rt *route.Route) {
+func (r *RemoteService) handleRPCUser(ctx context.Context, req *protos.Request, rt *route.Route) {
+	// TODO camila wtf pra que serve o ctx aqui ??
 	reply := req.GetMsg().GetReply()
 	response := &protos.Response{}
 
@@ -272,7 +315,7 @@ func (r *RemoteService) handleRPCUser(req *protos.Request, rt *route.Route) {
 	r.sendReply(reply, response)
 }
 
-func (r *RemoteService) handleRPCSys(req *protos.Request, rt *route.Route) {
+func (r *RemoteService) handleRPCSys(ctx context.Context, req *protos.Request, rt *route.Route) {
 	reply := req.GetMsg().GetReply()
 	response := &protos.Response{}
 
@@ -298,14 +341,6 @@ func (r *RemoteService) handleRPCSys(req *protos.Request, rt *route.Route) {
 		r.sendReply(reply, response)
 		return
 	}
-
-	m := req.GetMetadata()
-	ctxMap := map[string]interface{}{}
-	err = gob.NewDecoder(bytes.NewReader(m)).Decode(&ctxMap)
-	if err != nil {
-		// TODO camila handle error
-	}
-	ctx := pcontext.FromMap(ctxMap)
 
 	ret, err := processHandlerMessage(ctx, rt, r.serializer, a.Session, req.GetMsg().GetData(), req.GetMsg().GetType(), true)
 	if err != nil {

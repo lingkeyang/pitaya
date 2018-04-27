@@ -1,14 +1,18 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"encoding/gob"
 	"fmt"
 	"strconv"
 	"time"
 
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/topfreegames/pitaya"
 	"github.com/topfreegames/pitaya/component"
+	"github.com/topfreegames/pitaya/constants"
+	pcontext "github.com/topfreegames/pitaya/context"
 	"github.com/topfreegames/pitaya/timer"
 )
 
@@ -101,6 +105,41 @@ func (r *Room) AfterInit() {
 
 // Entry is the entrypoint
 func (r *Room) Entry(ctx context.Context, msg []byte) (*JoinResponse, error) {
+	var parentSpanCtx opentracing.SpanContext
+	parentSpan := opentracing.SpanFromContext(ctx)
+	if parentSpan == nil {
+		// TODO camila WTF there must be a better way
+		spanData := pcontext.GetFromPropagateCtx(ctx, constants.SpanPropagateCtxKey).([]byte)
+		tracer := opentracing.GlobalTracer()
+		var err error
+		parentSpanCtx, err = tracer.Extract(opentracing.Binary, bytes.NewBuffer(spanData))
+		if err != nil {
+			// TODO camila handle
+		}
+	} else {
+		parentSpanCtx = parentSpan.Context()
+	}
+	tags1 := opentracing.Tags{
+		"span.kind":    "client",
+		"db.type":      "sql",
+		"db.name":      "postgres",
+		"db.statement": "SELECT * FROM users;",
+	}
+	reference1 := opentracing.ChildOf(parentSpanCtx)
+	span1 := opentracing.StartSpan("SQL SELECT", reference1, tags1)
+	time.Sleep(20 * time.Millisecond)
+	span1.Finish()
+
+	tags2 := opentracing.Tags{
+		"span.kind":    "client",
+		"db.name":      "redis",
+		"db.statement": "KEYS *",
+	}
+	reference2 := opentracing.ChildOf(parentSpanCtx)
+	span2 := opentracing.StartSpan("REDIS KEYS", reference2, tags2)
+	time.Sleep(40 * time.Millisecond)
+	span2.Finish()
+
 	s := pitaya.GetSessionFromCtx(ctx)
 	err := s.Bind(ctx, strconv.Itoa(int(s.ID())))
 	if err != nil {

@@ -108,7 +108,7 @@ func (a *Remote) Push(route string, v interface{}) error {
 }
 
 // ResponseMID reponds the message with mid to the player
-func (a *Remote) ResponseMID(mid uint, v interface{}, isError ...bool) error {
+func (a *Remote) ResponseMID(ctx context.Context, mid uint, v interface{}, isError ...bool) error {
 	err := false
 	if len(isError) > 0 {
 		err = isError[0]
@@ -127,7 +127,7 @@ func (a *Remote) ResponseMID(mid uint, v interface{}, isError ...bool) error {
 			a.Session.ID(), mid, v)
 	}
 
-	return a.send(pendingMessage{typ: message.Response, mid: mid, payload: v, err: err}, a.reply)
+	return a.send(pendingMessage{ctx: ctx, typ: message.Response, mid: mid, payload: v, err: err}, a.reply)
 }
 
 // Close closes the remote
@@ -198,7 +198,7 @@ func (a *Remote) sendPush(m pendingMessage, to string) (err error) {
 }
 
 // SendRequest sends a request to a server
-func (a *Remote) SendRequest(serverID, reqRoute string, v interface{}) (*protos.Response, error) {
+func (a *Remote) SendRequest(ctx context.Context, serverID, reqRoute string, v interface{}) (*protos.Response, error) {
 	r, err := route.Decode(reqRoute)
 	if err != nil {
 		return nil, err
@@ -215,7 +215,5 @@ func (a *Remote) SendRequest(serverID, reqRoute string, v interface{}) (*protos.
 	if err != nil {
 		return nil, err
 	}
-	ctx := context.Background()
-	// TODO camila use proper context
 	return a.rpcClient.Call(ctx, protos.RPCType_User, r, nil, msg, server)
 }

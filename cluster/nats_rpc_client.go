@@ -21,17 +21,20 @@
 package cluster
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
 	nats "github.com/nats-io/go-nats"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/topfreegames/pitaya/config"
 	"github.com/topfreegames/pitaya/constants"
 	pcontext "github.com/topfreegames/pitaya/context"
 	"github.com/topfreegames/pitaya/errors"
 	"github.com/topfreegames/pitaya/internal/message"
+	"github.com/topfreegames/pitaya/jaeger"
 	"github.com/topfreegames/pitaya/protos"
 	"github.com/topfreegames/pitaya/route"
 	"github.com/topfreegames/pitaya/session"
@@ -95,11 +98,19 @@ func (ns *NatsRPCClient) buildRequest(
 			Data:  msg.Data,
 		},
 	}
+	span := opentracing.SpanFromContext(ctx)
+	spanData := new(bytes.Buffer)
+	tracer := opentracing.GlobalTracer()
+	err := tracer.Inject(span.Context(), opentracing.Binary, spanData)
+	if err != nil {
+		// TODO camila handle
+	}
+	ctx = pcontext.AddToPropagateCtx(ctx, constants.SpanPropagateCtxKey, spanData.Bytes())
 	m := pcontext.ToMap(ctx)
 	if len(m) > 0 {
 		b, err := util.GobEncode(m)
 		if err != nil {
-			// TODO: handle err
+			// TODO camila handle err
 		}
 		req.Metadata = b
 	}
@@ -142,6 +153,32 @@ func (ns *NatsRPCClient) Call(
 	if !ns.running {
 		return nil, constants.ErrRPCClientNotInitialized
 	}
+	// TODO camila not sure if necessary (redundant - remove)
+	var parentSpanCtx opentracing.SpanContext
+	parentSpan := opentracing.SpanFromContext(ctx)
+	if parentSpan == nil {
+		// TODO camila WTF there must be a better way
+		spanData := pcontext.GetFromPropagateCtx(ctx, constants.SpanPropagateCtxKey).([]byte)
+		tracer := opentracing.GlobalTracer()
+		var err error
+		parentSpanCtx, err = tracer.Extract(opentracing.Binary, bytes.NewBuffer(spanData))
+		if err != nil {
+			// TODO camila handle
+		}
+	} else {
+		parentSpanCtx = parentSpan.Context()
+	}
+	tags := opentracing.Tags{
+		"span.kind":     "client",
+		"pitaya.source": "local-id", // TODO camila
+		"pitaya.remote": server.ID,
+	}
+
+	reference := opentracing.ChildOf(parentSpanCtx)
+	span := opentracing.StartSpan(route.String(), reference, tags)
+	defer span.Finish()
+
+	ctx = opentracing.ContextWithSpan(ctx, span)
 	req := ns.buildRequest(ctx, rpcType, route, session, msg)
 	marshalledData, err := proto.Marshal(&req)
 	if err != nil {
@@ -149,6 +186,7 @@ func (ns *NatsRPCClient) Call(
 	}
 	m, err := ns.conn.Request(getChannel(server.Type, server.ID), marshalledData, ns.reqTimeout)
 	if err != nil {
+		jaeger.LogError(span, err.Error())
 		return nil, err
 	}
 
@@ -156,6 +194,7 @@ func (ns *NatsRPCClient) Call(
 	err = proto.Unmarshal(m.Data, res)
 
 	if err != nil {
+		jaeger.LogError(span, err.Error())
 		return nil, err
 	}
 
@@ -163,6 +202,7 @@ func (ns *NatsRPCClient) Call(
 		if res.Error.Code == "" {
 			res.Error.Code = errors.ErrUnknownCode
 		}
+		jaeger.LogError(span, res.Error.Msg)
 		err := &errors.Error{
 			Code:     res.Error.Code,
 			Message:  res.Error.Msg,
