@@ -42,7 +42,7 @@ func reply(code int32, msg string) (*Response, error) {
 
 // GetSessionData gets the session data
 func (c *Connector) GetSessionData(ctx context.Context) (*SessionData, error) {
-	parentSpanCtx, err := pitaya.GetSpanContext(ctx)
+	parentSpanCtx, err := pitaya.ExtractSpan(ctx)
 	if err != nil {
 		return nil, pitaya.Error(err, "RH-001", map[string]string{"failed": "span from context"})
 	}

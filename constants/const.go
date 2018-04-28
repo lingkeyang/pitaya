@@ -52,3 +52,9 @@ var PropagateCtxKey = propagateKey{}
 // SpanPropagateCtxKey is the key holding the opentracing spans inside
 // the propagate key
 var SpanPropagateCtxKey = "opentracing-span"
+
+// PeerIdKey is the key holding the peer id to be sent over the context
+var PeerIdKey = "peer.id"
+
+// PeerServiceKey is the key holding the peer service to be sent over the context
+var PeerServiceKey = "peer.service"

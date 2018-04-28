@@ -102,7 +102,7 @@ func (r *Room) AfterInit() {
 
 // Entry is the entrypoint
 func (r *Room) Entry(ctx context.Context, msg []byte) (*JoinResponse, error) {
-	parentSpanCtx, err := pitaya.GetSpanContext(ctx)
+	parentSpanCtx, err := pitaya.ExtractSpan(ctx)
 	if err != nil {
 		return nil, pitaya.Error(err, "RH-001", map[string]string{"failed": "span from context"})
 	}

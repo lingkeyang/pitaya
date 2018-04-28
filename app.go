@@ -43,6 +43,7 @@ import (
 	"github.com/topfreegames/pitaya/errors"
 	"github.com/topfreegames/pitaya/internal/codec"
 	"github.com/topfreegames/pitaya/internal/message"
+	"github.com/topfreegames/pitaya/jaeger"
 	"github.com/topfreegames/pitaya/logger"
 	"github.com/topfreegames/pitaya/remote"
 	"github.com/topfreegames/pitaya/route"
@@ -422,8 +423,8 @@ func GetFromPropagateCtx(ctx context.Context, key string) interface{} {
 	return pcontext.GetFromPropagateCtx(ctx, key)
 }
 
-// GetSpanContext retrieves an opentracing span context from the given context
+// ExtractSpan retrieves an opentracing span context from the given context
 // The span context can be received directly or via an RPC call
-func GetSpanContext(ctx context.Context) (opentracing.SpanContext, error) {
-	return pcontext.GetSpanContext(ctx)
+func ExtractSpan(ctx context.Context) (opentracing.SpanContext, error) {
+	return jaeger.ExtractSpan(ctx)
 }

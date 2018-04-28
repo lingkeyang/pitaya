@@ -21,26 +21,67 @@
 package jaeger
 
 import (
+	"bytes"
 	"context"
 
 	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/topfreegames/pitaya/constants"
+	pcontext "github.com/topfreegames/pitaya/context"
 )
 
+// ExtractSpan retrieves an opentracing span context from the given context.Context
+// The span context can be received directly (inside the context) or via an RPC call
+// (encoded in binary format)
+func ExtractSpan(ctx context.Context) (opentracing.SpanContext, error) {
+	var spanCtx opentracing.SpanContext
+	span := opentracing.SpanFromContext(ctx)
+	if span == nil {
+		spanData := pcontext.GetFromPropagateCtx(ctx, constants.SpanPropagateCtxKey).([]byte)
+		tracer := opentracing.GlobalTracer()
+		var err error
+		spanCtx, err = tracer.Extract(opentracing.Binary, bytes.NewBuffer(spanData))
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		spanCtx = span.Context()
+	}
+	return spanCtx, nil
+}
+
+// InjectSpan retriecves an opentrancing span from the current context and creates a new context
+// with it encoded in binary format inside the propagatable context content
+func InjectSpan(ctx context.Context) (context.Context, error) {
+	span := opentracing.SpanFromContext(ctx)
+	if span == nil {
+		return ctx, nil
+	}
+	spanData := new(bytes.Buffer)
+	tracer := opentracing.GlobalTracer()
+	err := tracer.Inject(span.Context(), opentracing.Binary, spanData)
+	if err != nil {
+		return nil, err
+	}
+	return pcontext.AddToPropagateCtx(ctx, constants.SpanPropagateCtxKey, spanData.Bytes()), nil
+}
+
+// StartSpan starts a new span with a given parent context, operation name, tags and
+// optional parent span. It returns a context with the created span.
 func StartSpan(
 	parentCtx context.Context,
 	opName string,
 	tags opentracing.Tags,
 	reference ...opentracing.SpanContext,
-) (opentracing.Span, context.Context) {
+) context.Context {
 	var ref opentracing.SpanContext
 	if len(reference) > 0 {
 		ref = reference[0]
 	}
 	span := opentracing.StartSpan(opName, opentracing.ChildOf(ref), tags)
-	ctx := opentracing.ContextWithSpan(parentCtx, span)
-	return span, ctx
+	return opentracing.ContextWithSpan(parentCtx, span)
 }
 
+// FinishSpan finishes a span retrieved from the given context and logs the error if it exists
 func FinishSpan(ctx context.Context, err error) {
 	if ctx == nil {
 		return

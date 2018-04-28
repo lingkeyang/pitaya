@@ -97,10 +97,12 @@ func (ns *NatsRPCClient) buildRequest(
 			Data:  msg.Data,
 		},
 	}
-	ctx, err := pcontext.InjectSpan(ctx)
+	ctx, err := jaeger.InjectSpan(ctx)
 	if err != nil {
 		logger.Log.Errorf("failed to inject span", err)
 	}
+	ctx = pcontext.AddToPropagateCtx(ctx, constants.PeerIdKey, ns.server.ID)
+	ctx = pcontext.AddToPropagateCtx(ctx, constants.PeerServiceKey, ns.server.Type)
 	req.Metadata, err = pcontext.Encode(ctx)
 	if err != nil {
 		return req, err
@@ -141,12 +143,16 @@ func (ns *NatsRPCClient) Call(
 	msg *message.Message,
 	server *Server,
 ) (*protos.Response, error) {
-	parent, err := pcontext.GetSpanContext(ctx)
+	parent, err := jaeger.ExtractSpan(ctx)
 	if err != nil {
 		logger.Log.Errorf("failed to retrieve parent span: %s", err.Error())
 	}
-	tags := opentracing.Tags{"span.kind": "client"}
-	_, ctx = jaeger.StartSpan(ctx, "RPC Call", tags, parent)
+	tags := opentracing.Tags{
+		"span.kind":    "client",
+		"peer.service": server.Type,
+		"peer.id":      server.ID,
+	}
+	ctx = jaeger.StartSpan(ctx, "RPC Call", tags, parent)
 	defer jaeger.FinishSpan(ctx, err)
 
 	if !ns.running {

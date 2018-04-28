@@ -239,7 +239,7 @@ func (h *HandlerService) processMessage(a *agent.Agent, msg *message.Message) {
 		"span.kind": "server",
 		"msg.type":  strings.ToLower(msg.Type.String()),
 	}
-	_, ctx := jaeger.StartSpan(context.Background(), msg.Route, tags)
+	ctx := jaeger.StartSpan(context.Background(), msg.Route, tags)
 
 	r, err := route.Decode(msg.Route)
 	if err != nil {

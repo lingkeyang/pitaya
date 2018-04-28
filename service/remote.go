@@ -202,12 +202,17 @@ func (r *RemoteService) ProcessRemoteMessages(threadID int) {
 			r.sendReply(ctx, req.GetMsg().GetReply(), response)
 			continue
 		}
-		parent, err := pcontext.GetSpanContext(ctx)
+		parent, err := jaeger.ExtractSpan(ctx)
 		if err != nil {
 			logger.Log.Errorf("failed to retrieve parent span: %s", err.Error())
 		}
-		tags := opentracing.Tags{"span.kind": "server"}
-		_, ctx = jaeger.StartSpan(ctx, req.GetMsg().GetRoute(), tags, parent)
+
+		tags := opentracing.Tags{
+			"span.kind":    "server",
+			"peer.id":      pcontext.GetFromPropagateCtx(ctx, constants.PeerIdKey),
+			"peer.service": pcontext.GetFromPropagateCtx(ctx, constants.PeerServiceKey),
+		}
+		ctx = jaeger.StartSpan(ctx, req.GetMsg().GetRoute(), tags, parent)
 
 		rt, err := route.Decode(req.GetMsg().GetRoute())
 		if err != nil {

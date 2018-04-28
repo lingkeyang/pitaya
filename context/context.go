@@ -25,7 +25,6 @@ import (
 	"context"
 	"encoding/gob"
 
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/topfreegames/pitaya/constants"
 	"github.com/topfreegames/pitaya/util"
 )
@@ -55,12 +54,12 @@ func ToMap(ctx context.Context) map[string]interface{} {
 	return map[string]interface{}{}
 }
 
-// FromMap creates a new context with the propagated values
+// FromMap creates a new context from a map with propagated values
 func FromMap(val map[string]interface{}) context.Context {
 	return context.WithValue(context.Background(), constants.PropagateCtxKey, val)
 }
 
-// Encode returns the given span propagatable context encoded in binary format
+// Encode returns the given propagatable context encoded in binary format
 func Encode(ctx context.Context) ([]byte, error) {
 	m := ToMap(ctx)
 	if len(m) > 0 {
@@ -75,47 +74,10 @@ func Decode(m []byte) (context.Context, error) {
 		// TODO maybe return an error
 		return nil, nil
 	}
-	ctxMap := map[string]interface{}{}
 	args := make([]interface{}, 0)
 	err := gob.NewDecoder(bytes.NewReader(m)).Decode(&args)
 	if err != nil {
 		return nil, err
 	}
-	ctxMap = args[0].(map[string]interface{})
-	return FromMap(ctxMap), nil
-}
-
-// GetSpanContext retrieves an opentracing span context from the given context
-// The span context can be received directly or via an RPC call
-func GetSpanContext(ctx context.Context) (opentracing.SpanContext, error) {
-	var spanCtx opentracing.SpanContext
-	span := opentracing.SpanFromContext(ctx)
-	if span == nil {
-		spanData := GetFromPropagateCtx(ctx, constants.SpanPropagateCtxKey).([]byte)
-		tracer := opentracing.GlobalTracer()
-		var err error
-		spanCtx, err = tracer.Extract(opentracing.Binary, bytes.NewBuffer(spanData))
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		spanCtx = span.Context()
-	}
-	return spanCtx, nil
-}
-
-// InjectSpan retrieves an opentrancing span from the current context and injects it
-// encoded in binary format into the propagate context
-func InjectSpan(ctx context.Context) (context.Context, error) {
-	span := opentracing.SpanFromContext(ctx)
-	if span == nil {
-		return ctx, nil
-	}
-	spanData := new(bytes.Buffer)
-	tracer := opentracing.GlobalTracer()
-	err := tracer.Inject(span.Context(), opentracing.Binary, spanData)
-	if err != nil {
-		return nil, err
-	}
-	return AddToPropagateCtx(ctx, constants.SpanPropagateCtxKey, spanData.Bytes()), nil
+	return FromMap(args[0].(map[string]interface{})), nil
 }
