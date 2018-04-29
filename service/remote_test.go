@@ -22,6 +22,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
 	"errors"
 	"math/rand"
@@ -42,8 +43,8 @@ import (
 	"github.com/topfreegames/pitaya/helpers"
 	"github.com/topfreegames/pitaya/internal/codec"
 	"github.com/topfreegames/pitaya/internal/message"
-	connmock "github.com/topfreegames/pitaya/mocks"
 	messagemocks "github.com/topfreegames/pitaya/internal/message/mocks"
+	connmock "github.com/topfreegames/pitaya/mocks"
 	"github.com/topfreegames/pitaya/protos"
 	"github.com/topfreegames/pitaya/route"
 	"github.com/topfreegames/pitaya/router"
@@ -53,19 +54,19 @@ import (
 	"github.com/topfreegames/pitaya/util"
 )
 
-func (m *MyComp) Remote1(ss *SomeStruct) ([]byte, error) {
+func (m *MyComp) Remote1(ctx context.Context, ss *SomeStruct) ([]byte, error) {
 	return []byte("ok"), nil
 }
 
-func (m *MyComp) Remote2() (*SomeStruct, error) {
+func (m *MyComp) Remote2(ctx context.Context) (*SomeStruct, error) {
 	return nil, nil
 }
 
-func (m *MyComp) RemoteRes(b []byte) ([]byte, error) {
+func (m *MyComp) RemoteRes(ctx context.Context, b []byte) ([]byte, error) {
 	return b, nil
 }
 
-func (m *MyComp) RemoteErr() ([]byte, error) {
+func (m *MyComp) RemoteErr(ctx context.Context) ([]byte, error) {
 	return nil, e.NewError(errors.New("remote err"), e.ErrUnknownCode)
 }
 
@@ -102,7 +103,6 @@ func TestRemoteServiceRegister(t *testing.T) {
 	val, ok := svc.services["MyComp"]
 	assert.True(t, ok)
 	assert.NotNil(t, val)
-	assert.Len(t, remotes, 4)
 	val2, ok := remotes["MyComp.Remote1"]
 	assert.True(t, ok)
 	assert.NotNil(t, val2)
@@ -128,7 +128,7 @@ func TestRemoteServiceRegisterFailsIfRegisterTwice(t *testing.T) {
 func TestRemoteServiceRegisterFailsIfNoRemoteMethods(t *testing.T) {
 	svc := NewRemoteService(nil, nil, nil, nil, nil, nil, nil)
 	err := svc.Register(&NoHandlerRemoteComp{}, []component.Option{})
-	assert.Equal(t, errors.New("type NoHandlerRemoteComp has no exported methods of suitable type"), err)
+	assert.Equal(t, errors.New("type NoHandlerRemoteComp has no exported methods of remote type"), err)
 }
 
 func TestRemoteServiceProcessUserPush(t *testing.T) {
@@ -143,7 +143,7 @@ func TestRemoteServiceProcessUserPush(t *testing.T) {
 	userPushCh := make(chan *protos.Push)
 
 	ss := session.New(mockEntity, true)
-	err := ss.Bind(uid)
+	err := ss.Bind(nil, uid)
 	assert.NoError(t, err)
 
 	svc := NewRemoteService(nil, mockRPCServer, nil, nil, nil, nil, nil)
@@ -171,7 +171,7 @@ func TestRemoteServiceSendReply(t *testing.T) {
 	resp := &protos.Response{Data: []byte(uuid.New().String()), Error: &protos.Error{Msg: uuid.New().String()}}
 	p, _ := proto.Marshal(resp)
 	mockRPCClient.EXPECT().Send(reply, p)
-	svc.sendReply(reply, resp)
+	svc.sendReply(nil, reply, resp)
 }
 
 func TestRemoteServiceRemoteCall(t *testing.T) {
@@ -199,10 +199,11 @@ func TestRemoteServiceRemoteCall(t *testing.T) {
 			assert.NotNil(t, svc)
 
 			msg := &message.Message{}
+			ctx := context.Background()
 			if table.server != nil {
-				mockRPCClient.EXPECT().Call(protos.RPCType_Sys, rt, ss, msg, sv).Return(table.res, table.err)
+				mockRPCClient.EXPECT().Call(ctx, protos.RPCType_Sys, rt, ss, msg, sv).Return(table.res, table.err)
 			}
-			res, err := svc.remoteCall(table.server, protos.RPCType_Sys, rt, ss, msg)
+			res, err := svc.remoteCall(ctx, table.server, protos.RPCType_Sys, rt, ss, msg)
 			assert.Equal(t, table.err, err)
 			assert.Equal(t, table.res, res)
 		})
@@ -233,7 +234,10 @@ func TestRemoteServiceHandleRPCUser(t *testing.T) {
 	remotes[rtRes.Short()] = &component.Remote{Receiver: reflect.ValueOf(tObj), Method: m, HasArgs: m.Type.NumIn() > 1}
 
 	buf := bytes.NewBuffer(nil)
-	err := gob.NewEncoder(buf).Encode([]interface{}{[]byte("ok")})
+	err := gob.NewEncoder(buf).Encode([]interface{}{map[string]interface{}{}, []byte("ok")})
+	assert.NoError(t, err)
+	bufErr := bytes.NewBuffer(nil)
+	err = gob.NewEncoder(bufErr).Encode([]interface{}{map[string]interface{}{}})
 	assert.NoError(t, err)
 	tables := []struct {
 		name         string
@@ -243,7 +247,7 @@ func TestRemoteServiceHandleRPCUser(t *testing.T) {
 	}{
 		{"remote_not_found", &protos.Request{Msg: &protos.Msg{}}, route.NewRoute("bla", "bla", "bla"), "route not found"},
 		{"failed_unmarshal", &protos.Request{Msg: &protos.Msg{Data: []byte("dd")}}, rt, "unexpected EOF"},
-		{"failed_pcall", &protos.Request{Msg: &protos.Msg{}}, rtErr, "remote err"},
+		{"failed_pcall", &protos.Request{Msg: &protos.Msg{Data: bufErr.Bytes()}}, rtErr, "remote err"},
 		{"success_nil_response", &protos.Request{Msg: &protos.Msg{}}, rtStr, ""},
 		{"success_response", &protos.Request{Msg: &protos.Msg{Data: buf.Bytes()}}, rtRes, ""},
 	}
@@ -273,7 +277,7 @@ func TestRemoteServiceHandleRPCUser(t *testing.T) {
 					assert.NotNil(t, res.Data)
 				}
 			})
-			svc.handleRPCUser(table.req, table.rt)
+			svc.handleRPCUser(context.Background(), table.req, table.rt)
 		})
 	}
 }
@@ -328,7 +332,7 @@ func TestRemoteServiceHandleRPCSys(t *testing.T) {
 					assert.Equal(t, table.req.Msg.Data, res.Data)
 				}
 			})
-			svc.handleRPCSys(table.req, table.rt)
+			svc.handleRPCSys(nil, table.req, table.rt)
 		})
 	}
 }
@@ -369,7 +373,8 @@ func TestRemoteServiceRemoteProcess(t *testing.T) {
 				Route: rt.Short(),
 				Data:  []byte("ok"),
 			}
-			mockRPCClient.EXPECT().Call(protos.RPCType_Sys, rt, gomock.Any(), expectedMsg, gomock.Any()).Return(&protos.Response{Data: []byte("ok")}, table.remoteCallErr)
+			ctx := context.Background()
+			mockRPCClient.EXPECT().Call(ctx, protos.RPCType_Sys, rt, gomock.Any(), expectedMsg, gomock.Any()).Return(&protos.Response{Data: []byte("ok")}, table.remoteCallErr)
 
 			if table.remoteCallErr != nil {
 				mockSerializer.EXPECT().Marshal(gomock.Any()).Return([]byte("err"), nil)
@@ -383,7 +388,7 @@ func TestRemoteServiceRemoteProcess(t *testing.T) {
 				ag.SetStatus(constants.StatusClosed)
 				mockSerializer.EXPECT().Marshal(gomock.Any()).Return([]byte("err"), nil)
 			}
-			svc.remoteProcess(sv, ag, rt, expectedMsg)
+			svc.remoteProcess(ctx, sv, ag, rt, expectedMsg)
 		})
 	}
 }
@@ -428,6 +433,7 @@ func TestRemoteServiceRPC(t *testing.T) {
 			}
 
 			var expected *SomeStruct
+			ctx := context.Background()
 			if table.foundServer {
 				expectedData, _ := util.GobEncode(table.args...)
 				expectedMsg := &message.Message{
@@ -440,9 +446,9 @@ func TestRemoteServiceRPC(t *testing.T) {
 				buf := bytes.NewBuffer(nil)
 				err := gob.NewEncoder(buf).Encode(expected)
 				assert.NoError(t, err)
-				mockRPCClient.EXPECT().Call(protos.RPCType_User, rt, gomock.Any(), expectedMsg, gomock.Any()).Return(&protos.Response{Data: buf.Bytes()}, table.err)
+				mockRPCClient.EXPECT().Call(ctx, protos.RPCType_User, rt, gomock.Any(), expectedMsg, gomock.Any()).Return(&protos.Response{Data: buf.Bytes()}, table.err)
 			}
-			err := svc.RPC(table.serverID, rt, table.reply, table.args...)
+			err := svc.RPC(ctx, table.serverID, rt, table.reply, table.args...)
 			assert.Equal(t, table.err, err)
 			if table.reply != nil {
 				assert.Equal(t, table.reply, expected)

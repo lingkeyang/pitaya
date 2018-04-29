@@ -66,8 +66,8 @@ func (r *Room) AfterInit() {
 func (r *Room) Join(ctx context.Context, msg []byte) (*protos.JoinResponse, error) {
 	res := &protos.JoinResponse{}
 	s := pitaya.GetSessionFromCtx(ctx)
-	fakeUID := s.ID()                         // just use s.ID as uid !!!
-	err := s.Bind(strconv.Itoa(int(fakeUID))) // binding session uid
+	fakeUID := s.ID()                              // just use s.ID as uid !!!
+	err := s.Bind(ctx, strconv.Itoa(int(fakeUID))) // binding session uid
 
 	if err != nil {
 		return nil, pitaya.Error(err, "RH-000", map[string]string{"failed": "bind"})

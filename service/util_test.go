@@ -21,6 +21,7 @@
 package service
 
 import (
+	"context"
 	"encoding/gob"
 	"errors"
 	"flag"
@@ -58,16 +59,16 @@ type SomeStruct struct {
 	B string
 }
 
-func (t *TestType) HandlerNil(*session.Session)                       {}
-func (t *TestType) HandlerRaw(s *session.Session, msg []byte)         {}
-func (t *TestType) HandlerPointer(s *session.Session, ss *SomeStruct) {}
-func (t *TestType) HandlerPointerRaw(s *session.Session, ss *SomeStruct) ([]byte, error) {
+func (t *TestType) HandlerNil(context.Context)                         {}
+func (t *TestType) HandlerRaw(ctx context.Context, msg []byte)         {}
+func (t *TestType) HandlerPointer(ctx context.Context, ss *SomeStruct) {}
+func (t *TestType) HandlerPointerRaw(ctx context.Context, ss *SomeStruct) ([]byte, error) {
 	return []byte("ok"), nil
 }
-func (t *TestType) HandlerPointerStruct(s *session.Session, ss *SomeStruct) (*SomeStruct, error) {
+func (t *TestType) HandlerPointerStruct(ctx context.Context, ss *SomeStruct) (*SomeStruct, error) {
 	return &SomeStruct{A: 1, B: "ok"}, nil
 }
-func (t *TestType) HandlerPointerErr(s *session.Session, ss *SomeStruct) ([]byte, error) {
+func (t *TestType) HandlerPointerErr(ctx context.Context, ss *SomeStruct) ([]byte, error) {
 	return nil, errors.New("HandlerPointerErr")
 }
 
@@ -80,6 +81,7 @@ func TestMain(m *testing.M) {
 
 func setup() {
 	gob.Register(SomeStruct{})
+	gob.Register(map[string]interface{}{})
 }
 
 func shutdown() {}
@@ -160,9 +162,9 @@ func TestUnmarshalRemoteArg(t *testing.T) {
 		name string
 		args []interface{}
 	}{
-		{"unmarshal_remote_test_1", []interface{}{[]byte{1}, "test", 1}},
-		{"unmarshal_remote_test_2", []interface{}{[]byte{1}, SomeStruct{A: 1, B: "aaa"}, 34}},
-		{"unmarshal_remote_test_3", []interface{}{"aaa"}},
+		{"unmarshal_remote_test_1", []interface{}{map[string]interface{}{}, []byte{1}, "test", 1}},
+		{"unmarshal_remote_test_2", []interface{}{map[string]interface{}{}, []byte{1}, SomeStruct{A: 1, B: "aaa"}, 34}},
+		{"unmarshal_remote_test_3", []interface{}{map[string]interface{}{}, "aaa"}},
 	}
 
 	for _, table := range tables {
@@ -178,7 +180,14 @@ func TestUnmarshalRemoteArg(t *testing.T) {
 
 			args, err := unmarshalRemoteArg(payload)
 			assert.NoError(t, err)
-			assert.Equal(t, table.args, args)
+			for i, arg := range args {
+				if i == 0 {
+					fakeCtx := context.WithValue(context.Background(), "any", "any")
+					assert.IsType(t, fakeCtx, arg)
+				} else {
+					assert.Equal(t, table.args[i], arg)
+				}
+			}
 		})
 	}
 }
@@ -224,17 +233,17 @@ func TestExecuteBeforePipelineEmpty(t *testing.T) {
 }
 
 func TestExecuteBeforePipelineSuccess(t *testing.T) {
-	ss := session.New(nil, false)
+	c := context.Background()
 	data := []byte("ok")
 	expected1 := []byte("oh noes 1")
 	expected2 := []byte("oh noes 2")
-	before1 := func(s *session.Session, in []byte) ([]byte, error) {
-		assert.Equal(t, ss, s)
+	before1 := func(ctx context.Context, in []byte) ([]byte, error) {
+		assert.Equal(t, c, ctx)
 		assert.Equal(t, data, in)
 		return expected1, nil
 	}
-	before2 := func(s *session.Session, in []byte) ([]byte, error) {
-		assert.Equal(t, ss, s)
+	before2 := func(ctx context.Context, in []byte) ([]byte, error) {
+		assert.Equal(t, c, ctx)
 		assert.Equal(t, expected1, in)
 		return expected2, nil
 	}
@@ -242,22 +251,22 @@ func TestExecuteBeforePipelineSuccess(t *testing.T) {
 	pipeline.BeforeHandler.PushBack(before2)
 	defer pipeline.BeforeHandler.Clear()
 
-	res, err := executeBeforePipeline(ss, data)
+	res, err := executeBeforePipeline(c, data)
 	assert.NoError(t, err)
 	assert.Equal(t, expected2, res)
 }
 
 func TestExecuteBeforePipelineError(t *testing.T) {
-	ss := session.New(nil, false)
+	c := context.Background()
 	expected := errors.New("oh noes")
-	before := func(s *session.Session, in []byte) ([]byte, error) {
-		assert.Equal(t, ss, s)
+	before := func(ctx context.Context, in []byte) ([]byte, error) {
+		assert.Equal(t, c, ctx)
 		return nil, expected
 	}
 	pipeline.BeforeHandler.PushFront(before)
 	defer pipeline.BeforeHandler.Clear()
 
-	_, err := executeBeforePipeline(ss, []byte("ok"))
+	_, err := executeBeforePipeline(c, []byte("ok"))
 	assert.Equal(t, expected, err)
 }
 
@@ -268,17 +277,17 @@ func TestExecuteAfterPipelineEmpty(t *testing.T) {
 }
 
 func TestExecuteAfterPipelineSuccess(t *testing.T) {
-	ss := session.New(nil, false)
+	c := context.Background()
 	data := []byte("ok")
 	expected1 := []byte("oh noes 1")
 	expected2 := []byte("oh noes 2")
-	after1 := func(s *session.Session, in []byte) ([]byte, error) {
-		assert.Equal(t, ss, s)
+	after1 := func(ctx context.Context, in []byte) ([]byte, error) {
+		assert.Equal(t, c, ctx)
 		assert.Equal(t, data, in)
 		return expected1, nil
 	}
-	after2 := func(s *session.Session, in []byte) ([]byte, error) {
-		assert.Equal(t, ss, s)
+	after2 := func(ctx context.Context, in []byte) ([]byte, error) {
+		assert.Equal(t, c, ctx)
 		assert.Equal(t, expected1, in)
 		return expected2, nil
 	}
@@ -286,7 +295,7 @@ func TestExecuteAfterPipelineSuccess(t *testing.T) {
 	pipeline.AfterHandler.PushBack(after2)
 	defer pipeline.AfterHandler.Clear()
 
-	res := executeAfterPipeline(ss, nil, []byte("ok"))
+	res := executeAfterPipeline(c, nil, []byte("ok"))
 	assert.Equal(t, expected2, res)
 }
 
@@ -295,9 +304,9 @@ func TestExecuteAfterPipelineError(t *testing.T) {
 	defer ctrl.Finish()
 	mockSerializer := mocks.NewMockSerializer(ctrl)
 
-	ss := session.New(nil, false)
-	after := func(s *session.Session, in []byte) ([]byte, error) {
-		assert.Equal(t, ss, s)
+	c := context.Background()
+	after := func(ctx context.Context, in []byte) ([]byte, error) {
+		assert.Equal(t, c, ctx)
 		return nil, errors.New("oh noes")
 	}
 	pipeline.AfterHandler.PushFront(after)
@@ -305,7 +314,7 @@ func TestExecuteAfterPipelineError(t *testing.T) {
 
 	expected := []byte("error")
 	mockSerializer.EXPECT().Marshal(gomock.Any()).Return(expected, nil)
-	res := executeAfterPipeline(ss, mockSerializer, []byte("ok"))
+	res := executeAfterPipeline(c, mockSerializer, []byte("ok"))
 	assert.Equal(t, expected, res)
 }
 
@@ -365,7 +374,6 @@ func TestProcessHandlerMessage(t *testing.T) {
 	defer func() { handlers = make(map[string]*component.Handler, 0) }()
 
 	ss := session.New(nil, false)
-	cs := reflect.ValueOf(ss)
 
 	tables := []struct {
 		name         string
@@ -407,7 +415,7 @@ func TestProcessHandlerMessage(t *testing.T) {
 					mockSerializer.EXPECT().Marshal(gomock.Any()).Return(table.out, nil)
 				}
 			}
-			out, err := processHandlerMessage(table.route, mockSerializer, cs, ss, nil, table.msgType, table.remote)
+			out, err := processHandlerMessage(nil, table.route, mockSerializer, ss, nil, table.msgType, table.remote)
 			assert.Equal(t, table.out, out)
 			assert.Equal(t, table.err, err)
 		})
@@ -419,15 +427,14 @@ func TestProcessHandlerMessageBrokenBeforePipeline(t *testing.T) {
 	handlers[rt.Short()] = &component.Handler{}
 	defer func() { delete(handlers, rt.Short()) }()
 	expected := errors.New("oh noes")
-	before := func(s *session.Session, in []byte) ([]byte, error) {
+	before := func(ctx context.Context, in []byte) ([]byte, error) {
 		return nil, expected
 	}
 	pipeline.BeforeHandler.PushFront(before)
 	defer pipeline.BeforeHandler.Clear()
 
 	ss := session.New(nil, false)
-	cs := reflect.ValueOf(ss)
-	out, err := processHandlerMessage(rt, nil, cs, ss, nil, message.Request, false)
+	out, err := processHandlerMessage(nil, rt, nil, ss, nil, message.Request, false)
 	assert.Nil(t, out)
 	assert.Equal(t, expected, err)
 }
@@ -441,7 +448,7 @@ func TestProcessHandlerMessageBrokenAfterPipeline(t *testing.T) {
 	handlers[rt.Short()] = &component.Handler{Receiver: reflect.ValueOf(tObj), Method: m, Type: m.Type.In(2)}
 	defer func() { delete(handlers, rt.Short()) }()
 
-	after := func(s *session.Session, in []byte) ([]byte, error) {
+	after := func(ctx context.Context, in []byte) ([]byte, error) {
 		return nil, errors.New("oh noes")
 	}
 	pipeline.AfterHandler.PushFront(after)
@@ -451,7 +458,6 @@ func TestProcessHandlerMessageBrokenAfterPipeline(t *testing.T) {
 	defer ctrl.Finish()
 
 	ss := session.New(nil, false)
-	cs := reflect.ValueOf(ss)
 	mockSerializer := mocks.NewMockSerializer(ctrl)
 	mockSerializer.EXPECT().Unmarshal(gomock.Any(), gomock.Any()).Return(nil).Do(
 		func(p []byte, arg interface{}) {
@@ -460,7 +466,7 @@ func TestProcessHandlerMessageBrokenAfterPipeline(t *testing.T) {
 	expected := []byte("oops")
 	mockSerializer.EXPECT().Marshal(gomock.Any()).Return(expected, nil)
 
-	out, err := processHandlerMessage(rt, mockSerializer, cs, ss, nil, message.Request, false)
+	out, err := processHandlerMessage(nil, rt, mockSerializer, ss, nil, message.Request, false)
 	assert.Equal(t, expected, out)
 	assert.NoError(t, err)
 }
