@@ -59,6 +59,7 @@ type RemoteService struct {
 	services         map[string]*component.Service // all registered service
 	router           *router.Router
 	messageEncoder   message.MessageEncoder
+	server           *cluster.Server // server obj
 }
 
 // NewRemoteService creates and return a new RemoteService
@@ -70,6 +71,7 @@ func NewRemoteService(
 	serializer serialize.Serializer,
 	router *router.Router,
 	messageEncoder message.MessageEncoder,
+	server *cluster.Server,
 ) *RemoteService {
 	return &RemoteService{
 		services:         make(map[string]*component.Service),
@@ -80,6 +82,7 @@ func NewRemoteService(
 		serializer:       serializer,
 		router:           router,
 		messageEncoder:   messageEncoder,
+		server:           server,
 	}
 }
 
@@ -208,6 +211,7 @@ func (r *RemoteService) ProcessRemoteMessages(threadID int) {
 		}
 
 		tags := opentracing.Tags{
+			"local.id":     r.server.ID,
 			"span.kind":    "server",
 			"peer.id":      pcontext.GetFromPropagateCtx(ctx, constants.PeerIdKey),
 			"peer.service": pcontext.GetFromPropagateCtx(ctx, constants.PeerServiceKey),

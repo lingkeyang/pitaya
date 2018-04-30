@@ -236,6 +236,7 @@ func (h *HandlerService) processPacket(a *agent.Agent, p *packet.Packet) error {
 
 func (h *HandlerService) processMessage(a *agent.Agent, msg *message.Message) {
 	tags := opentracing.Tags{
+		"local.id":  h.server.ID,
 		"span.kind": "server",
 		"msg.type":  strings.ToLower(msg.Type.String()),
 	}

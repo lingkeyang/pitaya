@@ -300,7 +300,7 @@ func TestHandlerServiceProcessPacketData(t *testing.T) {
 			mockConn := connmock.NewMockConn(ctrl)
 			packetEncoder := codec.NewPomeloPacketEncoder()
 			messageEncoder := message.NewEncoder(false)
-			svc := NewHandlerService(nil, nil, nil, nil, 1*time.Second, 1, 1, 1, nil, nil, nil)
+			svc := NewHandlerService(nil, nil, nil, nil, 1*time.Second, 1, 1, 1, &cluster.Server{}, nil, nil)
 			if table.socketStatus < constants.StatusWorking {
 				mockConn.EXPECT().RemoteAddr().Return(&mockAddr{})
 			}

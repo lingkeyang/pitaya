@@ -294,6 +294,7 @@ func Start() {
 			app.serializer,
 			app.router,
 			app.messageEncoder,
+			app.server,
 		)
 		initSysRemotes()
 	}

@@ -148,9 +148,10 @@ func (ns *NatsRPCClient) Call(
 		logger.Log.Errorf("failed to retrieve parent span: %s", err.Error())
 	}
 	tags := opentracing.Tags{
-		"span.kind":    "client",
-		"peer.service": server.Type,
-		"peer.id":      server.ID,
+		"span.kind":       "client",
+		"local.id":        ns.server.ID,
+		"peer.serverType": server.Type,
+		"peer.id":         server.ID,
 	}
 	ctx = jaeger.StartSpan(ctx, "RPC Call", tags, parent)
 	defer jaeger.FinishSpan(ctx, err)
