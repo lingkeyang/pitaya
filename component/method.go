@@ -49,7 +49,7 @@ func isRemoteMethod(method reflect.Method) bool {
 		return false
 	}
 
-	// Method needs ate least two ins: receiver and context.Context
+	// Method needs at least two ins: receiver and context.Context
 	if mt.NumIn() < 2 {
 		return false
 	}
@@ -115,7 +115,7 @@ func suitableRemoteMethods(typ reflect.Type, nameFunc func(string) string) map[s
 			}
 			methods[mn] = &Remote{
 				Method:  method,
-				HasArgs: method.Type.NumIn() > 1,
+				HasArgs: method.Type.NumIn() > 2,
 			}
 		}
 	}

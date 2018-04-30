@@ -478,7 +478,7 @@ func TestSessionBindBackend(t *testing.T) {
 				UID: uid,
 			}
 			ctx := context.Background()
-			expectedRequestData, err := util.GobEncode(map[string]interface{}{}, expectedSessionData)
+			expectedRequestData, err := util.GobEncode(expectedSessionData)
 			assert.NoError(t, err)
 
 			mockEntity.EXPECT().SendRequest(ctx, ss.frontendID, constants.SessionBindRoute, expectedRequestData).Return(&protos.Response{}, table.err)
@@ -1242,7 +1242,7 @@ func TestSessionPushToFront(t *testing.T) {
 				UID:  uid,
 				Data: ss.data,
 			}
-			expectedRequestData, err := util.GobEncode(map[string]interface{}{}, expectedSessionData)
+			expectedRequestData, err := util.GobEncode(expectedSessionData)
 			assert.NoError(t, err)
 			ctx := context.Background()
 			mockEntity.EXPECT().SendRequest(ctx, ss.frontendID, constants.SessionPushRoute, expectedRequestData).Return(nil, table.err)

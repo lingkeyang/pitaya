@@ -30,7 +30,6 @@ import (
 
 	"github.com/topfreegames/pitaya/component"
 	"github.com/topfreegames/pitaya/constants"
-	pcontext "github.com/topfreegames/pitaya/context"
 	e "github.com/topfreegames/pitaya/errors"
 	"github.com/topfreegames/pitaya/internal/message"
 	"github.com/topfreegames/pitaya/logger"
@@ -76,7 +75,6 @@ func unmarshalRemoteArg(payload []byte) ([]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	args[0] = pcontext.FromMap(args[0].(map[string]interface{}))
 	return args, nil
 }
 

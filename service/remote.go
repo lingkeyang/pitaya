@@ -257,7 +257,7 @@ func (r *RemoteService) handleRPCUser(ctx context.Context, req *protos.Request, 
 		r.sendReply(ctx, reply, response)
 		return
 	}
-	params := []reflect.Value{remote.Receiver}
+	params := []reflect.Value{remote.Receiver, reflect.ValueOf(ctx)}
 	if remote.HasArgs {
 		args, err := unmarshalRemoteArg(req.GetMsg().GetData())
 		if err != nil {

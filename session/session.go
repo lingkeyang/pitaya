@@ -31,7 +31,6 @@ import (
 
 	nats "github.com/nats-io/go-nats"
 	"github.com/topfreegames/pitaya/constants"
-	pcontext "github.com/topfreegames/pitaya/context"
 	"github.com/topfreegames/pitaya/logger"
 	"github.com/topfreegames/pitaya/protos"
 	"github.com/topfreegames/pitaya/util"
@@ -573,8 +572,7 @@ func (s *Session) sendRequestToFront(ctx context.Context, route string, includeD
 	if includeData {
 		sessionData.Data = s.data
 	}
-	m := pcontext.ToMap(ctx)
-	b, err := util.GobEncode(m, sessionData)
+	b, err := util.GobEncode(sessionData)
 	if err != nil {
 		return err
 	}

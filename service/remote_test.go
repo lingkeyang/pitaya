@@ -216,28 +216,25 @@ func TestRemoteServiceHandleRPCUser(t *testing.T) {
 	assert.True(t, ok)
 	assert.NotNil(t, m)
 	rt := route.NewRoute("", uuid.New().String(), uuid.New().String())
-	remotes[rt.Short()] = &component.Remote{Receiver: reflect.ValueOf(tObj), Method: m, HasArgs: m.Type.NumIn() > 1}
+	remotes[rt.Short()] = &component.Remote{Receiver: reflect.ValueOf(tObj), Method: m, HasArgs: m.Type.NumIn() > 2}
 	m, ok = reflect.TypeOf(tObj).MethodByName("RemoteErr")
 	assert.True(t, ok)
 	assert.NotNil(t, m)
 	rtErr := route.NewRoute("", uuid.New().String(), uuid.New().String())
-	remotes[rtErr.Short()] = &component.Remote{Receiver: reflect.ValueOf(tObj), Method: m, HasArgs: m.Type.NumIn() > 1}
+	remotes[rtErr.Short()] = &component.Remote{Receiver: reflect.ValueOf(tObj), Method: m, HasArgs: m.Type.NumIn() > 2}
 	m, ok = reflect.TypeOf(tObj).MethodByName("Remote2")
 	assert.True(t, ok)
 	assert.NotNil(t, m)
 	rtStr := route.NewRoute("", uuid.New().String(), uuid.New().String())
-	remotes[rtStr.Short()] = &component.Remote{Receiver: reflect.ValueOf(tObj), Method: m, HasArgs: m.Type.NumIn() > 1}
+	remotes[rtStr.Short()] = &component.Remote{Receiver: reflect.ValueOf(tObj), Method: m, HasArgs: m.Type.NumIn() > 2}
 	m, ok = reflect.TypeOf(tObj).MethodByName("RemoteRes")
 	assert.True(t, ok)
 	assert.NotNil(t, m)
 	rtRes := route.NewRoute("", uuid.New().String(), uuid.New().String())
-	remotes[rtRes.Short()] = &component.Remote{Receiver: reflect.ValueOf(tObj), Method: m, HasArgs: m.Type.NumIn() > 1}
+	remotes[rtRes.Short()] = &component.Remote{Receiver: reflect.ValueOf(tObj), Method: m, HasArgs: m.Type.NumIn() > 2}
 
 	buf := bytes.NewBuffer(nil)
-	err := gob.NewEncoder(buf).Encode([]interface{}{map[string]interface{}{}, []byte("ok")})
-	assert.NoError(t, err)
-	bufErr := bytes.NewBuffer(nil)
-	err = gob.NewEncoder(bufErr).Encode([]interface{}{map[string]interface{}{}})
+	err := gob.NewEncoder(buf).Encode([]interface{}{[]byte("ok")})
 	assert.NoError(t, err)
 	tables := []struct {
 		name         string
@@ -247,7 +244,7 @@ func TestRemoteServiceHandleRPCUser(t *testing.T) {
 	}{
 		{"remote_not_found", &protos.Request{Msg: &protos.Msg{}}, route.NewRoute("bla", "bla", "bla"), "route not found"},
 		{"failed_unmarshal", &protos.Request{Msg: &protos.Msg{Data: []byte("dd")}}, rt, "unexpected EOF"},
-		{"failed_pcall", &protos.Request{Msg: &protos.Msg{Data: bufErr.Bytes()}}, rtErr, "remote err"},
+		{"failed_pcall", &protos.Request{Msg: &protos.Msg{}}, rtErr, "remote err"},
 		{"success_nil_response", &protos.Request{Msg: &protos.Msg{}}, rtStr, ""},
 		{"success_response", &protos.Request{Msg: &protos.Msg{Data: buf.Bytes()}}, rtRes, ""},
 	}

@@ -223,7 +223,6 @@ func (t *TestSvc) TestSendRPCNoArgs(ctx context.Context, msg *TestRPCRequest) (*
 }
 
 func main() {
-
 	gob.Register(&TestRequest{})
 
 	port := flag.Int("port", 32222, "the port to listen")

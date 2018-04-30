@@ -162,9 +162,9 @@ func TestUnmarshalRemoteArg(t *testing.T) {
 		name string
 		args []interface{}
 	}{
-		{"unmarshal_remote_test_1", []interface{}{map[string]interface{}{}, []byte{1}, "test", 1}},
-		{"unmarshal_remote_test_2", []interface{}{map[string]interface{}{}, []byte{1}, SomeStruct{A: 1, B: "aaa"}, 34}},
-		{"unmarshal_remote_test_3", []interface{}{map[string]interface{}{}, "aaa"}},
+		{"unmarshal_remote_test_1", []interface{}{[]byte{1}, "test", 1}},
+		{"unmarshal_remote_test_2", []interface{}{[]byte{1}, SomeStruct{A: 1, B: "aaa"}, 34}},
+		{"unmarshal_remote_test_3", []interface{}{"aaa"}},
 	}
 
 	for _, table := range tables {
@@ -181,12 +181,7 @@ func TestUnmarshalRemoteArg(t *testing.T) {
 			args, err := unmarshalRemoteArg(payload)
 			assert.NoError(t, err)
 			for i, arg := range args {
-				if i == 0 {
-					fakeCtx := context.WithValue(context.Background(), "any", "any")
-					assert.IsType(t, fakeCtx, arg)
-				} else {
-					assert.Equal(t, table.args[i], arg)
-				}
+				assert.Equal(t, table.args[i], arg)
 			}
 		})
 	}

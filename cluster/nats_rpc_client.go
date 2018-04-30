@@ -99,7 +99,7 @@ func (ns *NatsRPCClient) buildRequest(
 	}
 	ctx, err := jaeger.InjectSpan(ctx)
 	if err != nil {
-		logger.Log.Errorf("failed to inject span", err)
+		logger.Log.Errorf("failed to inject span: %s", err)
 	}
 	ctx = pcontext.AddToPropagateCtx(ctx, constants.PeerIdKey, ns.server.ID)
 	ctx = pcontext.AddToPropagateCtx(ctx, constants.PeerServiceKey, ns.server.Type)
@@ -134,7 +134,7 @@ func (ns *NatsRPCClient) buildRequest(
 	return req, nil
 }
 
-// Call calls a method remotally
+// Call calls a method remotelly
 func (ns *NatsRPCClient) Call(
 	ctx context.Context,
 	rpcType protos.RPCType,
