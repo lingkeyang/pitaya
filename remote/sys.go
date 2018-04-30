@@ -33,6 +33,11 @@ type Sys struct {
 	component.Base
 }
 
+// KickAnswer is the response struct used by Kick method
+type KickAnswer struct {
+	kicked bool
+}
+
 // BindSession binds the local session
 func (s *Sys) BindSession(ctx context.Context, sessionData *session.Data) ([]byte, error) {
 	sess := session.GetSessionByID(sessionData.ID)
@@ -55,4 +60,21 @@ func (s *Sys) PushSession(ctx context.Context, sessionData *session.Data) ([]byt
 		return nil, err
 	}
 	return []byte("ack"), nil
+}
+
+// Kick kicks a local player
+func (s *Sys) Kick(ctx context.Context, userID string) (*KickAnswer, error) {
+	res := &KickAnswer{
+		kicked: false,
+	}
+	sess := session.GetSessionByUID(userID)
+	if sess == nil {
+		return res, constants.ErrSessionNotFound
+	}
+	err := sess.Kick(ctx)
+	if err != nil {
+		return res, err
+	}
+	res.kicked = true
+	return res, nil
 }

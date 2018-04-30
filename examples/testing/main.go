@@ -107,6 +107,11 @@ func (t *TestSvc) Init() {
 	t.group = pitaya.NewGroup("g1")
 }
 
+// TestRequestKickUser handler for e2e tests
+func (t *TestSvc) TestRequestKickUser(ctx context.Context, userID []byte) (*TestResponse, error) {
+
+}
+
 // TestRequestOnlySessionReturnsPtr handler for e2e tests
 func (t *TestSvc) TestRequestOnlySessionReturnsPtr(ctx context.Context) (*TestResponse, error) {
 	return &TestResponse{
