@@ -249,8 +249,7 @@ func (s *Session) Kick(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	s.Close()
-	return nil
+	return s.entity.Close()
 }
 
 // OnClose adds the function it receives to the callbacks that will be called

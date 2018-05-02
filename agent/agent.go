@@ -233,7 +233,7 @@ func (a *Agent) GetStatus() int32 {
 // Kick sends a kick packet to a client
 func (a *Agent) Kick(ctx context.Context) error {
 	// packet encode
-	p, err := a.encoder.Encode(packet.Kick, []byte{})
+	p, err := a.encoder.Encode(packet.Kick, nil)
 	if err != nil {
 		return err
 	}
