@@ -35,7 +35,7 @@ type Sys struct {
 
 // KickAnswer is the response struct used by Kick method
 type KickAnswer struct {
-	kicked bool
+	Kicked bool `json:"kicked"`
 }
 
 // BindSession binds the local session
@@ -63,11 +63,11 @@ func (s *Sys) PushSession(ctx context.Context, sessionData *session.Data) ([]byt
 }
 
 // Kick kicks a local player
-func (s *Sys) Kick(ctx context.Context, userID string) (*KickAnswer, error) {
+func (s *Sys) Kick(ctx context.Context, userID []byte) (*KickAnswer, error) {
 	res := &KickAnswer{
-		kicked: false,
+		Kicked: false,
 	}
-	sess := session.GetSessionByUID(userID)
+	sess := session.GetSessionByUID(string(userID))
 	if sess == nil {
 		return res, constants.ErrSessionNotFound
 	}
@@ -75,6 +75,6 @@ func (s *Sys) Kick(ctx context.Context, userID string) (*KickAnswer, error) {
 	if err != nil {
 		return res, err
 	}
-	res.kicked = true
+	res.Kicked = true
 	return res, nil
 }

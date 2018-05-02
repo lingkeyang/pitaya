@@ -91,7 +91,11 @@ func (a *Remote) Kick(ctx context.Context) error {
 	if a.Session.UID() == "" {
 		return constants.ErrNoUIDBind
 	}
-	_, err := a.SendRequest(ctx, a.frontendID, "sys.kick", []byte(a.Session.UID()))
+	b, err := util.GobEncode([]byte(a.Session.UID()))
+	if err != nil {
+		return err
+	}
+	_, err = a.SendRequest(ctx, a.frontendID, "sys.kick", b)
 	return err
 }
 
